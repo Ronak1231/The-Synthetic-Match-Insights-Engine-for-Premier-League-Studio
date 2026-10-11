@@ -8,7 +8,7 @@ from app.store.memory import MemoryStore
 
 
 def client():
-    s = Settings(store_provider="memory", llm_provider="template")
+    s = Settings(store_provider="memory", llm_provider="template", warm_on_start=False)
     llm, info = build_llm(s)
     return TestClient(create_app(s, MatchService(s, MemoryStore(), llm, info)))
 

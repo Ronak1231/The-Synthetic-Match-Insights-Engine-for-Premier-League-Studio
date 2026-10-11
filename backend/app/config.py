@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     llm_min_importance: float = 0.7  # only the key moments are sent to the LLM
     llm_max_calls_per_match: int = 12
     llm_concurrency: int = 2
+    llm_budget_s: float = 40.0       # total time the narrator may spend on the LLM per match
+    warm_on_start: bool = True        # build the default match in the background at startup
     llm_seed_allowlist: str = "40"  # seeds allowed to call the LLM (spend guard); others use templates
 
     # --- Storage --------------------------------------------------------------

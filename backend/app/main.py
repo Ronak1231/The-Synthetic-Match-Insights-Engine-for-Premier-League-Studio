@@ -34,7 +34,18 @@ def create_app(settings: Settings | None = None, service: MatchService | None = 
             app.state.svc = MatchService(settings, build_store(settings), llm, info)
         else:
             app.state.svc = service
+        warm = None
+        if settings.warm_on_start:
+            # Build the default match now so the first visitor does not wait for the agents and the LLM.
+            async def _warm() -> None:
+                try:
+                    await app.state.svc.get_bundle(settings.default_seed)
+                except Exception:  # noqa: BLE001 - warming is best effort
+                    pass
+            warm = asyncio.create_task(_warm())
         yield
+        if warm and not warm.done():
+            warm.cancel()
 
     app = FastAPI(title="Match Insights Engine", version="1.0.0", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list,

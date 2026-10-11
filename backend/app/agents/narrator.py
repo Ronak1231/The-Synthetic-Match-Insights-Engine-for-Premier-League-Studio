@@ -125,4 +125,9 @@ class NarratorAgent:
                             stats[kind] += 1
                             state.log(self.name, "llm_fallback", "warn", insight=ins["id"], reason=str(exc)[:160])
 
-        await asyncio.gather(*(one(i) for i in picks))
+        try:
+            await asyncio.wait_for(asyncio.gather(*(one(i) for i in picks)), timeout=cfg.llm_budget_s)
+        except asyncio.TimeoutError:
+            # Keep whatever the model finished; everything else stays on template text.
+            stats["timed_out"] = True
+            state.log(self.name, "llm_budget", "warn", budget_s=cfg.llm_budget_s, accepted=stats["accepted"])

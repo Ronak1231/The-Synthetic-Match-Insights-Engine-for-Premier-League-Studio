@@ -2,7 +2,7 @@
 // Render's free tier sleeps when idle, so the first request can take about a minute: the UI
 // never waits for it and keeps playing the local simulation in the meantime.
 export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-const WAKE_TIMEOUT_MS = 75000;
+const WAKE_TIMEOUT_MS = 150000;
 
 async function getJson(path, signal) {
   const res = await fetch(`${API_URL}${path}`, { signal });
@@ -17,6 +17,9 @@ export async function loadBackend(seed, outerSignal) {
   try {
     const [config, bundle] = await Promise.all([getJson('/api/config', ctl.signal), getJson(`/api/match/${seed}`, ctl.signal)]);
     return { config, bundle };
+  } catch (err) {
+    if (ctl.signal.aborted && !outerSignal?.aborted) throw new Error('timed out waiting for the backend');
+    throw new Error(`${err.message || err} (${API_URL})`);
   } finally {
     clearTimeout(timer);
   }

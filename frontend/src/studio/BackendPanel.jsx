@@ -29,7 +29,7 @@ export default function BackendPanel({ backend }) {
   let label;
   if (backend.status === 'disabled') label = 'Browser simulator · no backend configured';
   else if (backend.status === 'connecting') label = 'Waking the backend… the simulator keeps playing meanwhile';
-  else if (backend.status === 'offline') label = 'Backend unreachable · running on the browser simulator';
+  else if (backend.status === 'offline') label = `Backend unreachable: ${backend.error || 'unknown error'} · running on the browser simulator`;
   else label = `Backend live · LLM: ${cfg.llm.active}${cfg.llm.active === 'template' && cfg.llm.note ? ` (${cfg.llm.note})` : ''} · store: ${cfg.store.active}`;
 
   return (

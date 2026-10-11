@@ -163,3 +163,37 @@ def test_bundle_is_cached_after_first_build():
     svc = make_service()
     a = asyncio.run(svc.get_bundle(40))
     assert asyncio.run(svc.store.get_bundle(40, "template"))["meta"]["generated_at"] == a["meta"]["generated_at"]
+
+
+def test_slow_llm_cannot_exceed_its_time_budget():
+    import time
+
+    class Slow:
+        name = "slow"
+        async def complete_json(self, system, user, **kw):
+            await asyncio.sleep(5)
+            return good_output()
+
+    state = PipelineState(seed=40)
+    cfg = Settings(store_provider="memory", llm_max_calls_per_match=3, llm_budget_s=0.2)
+    bundle = asyncio.run(make_service().build(40))
+    state.insights, state.events, state.final = bundle["insights"], bundle["events"], bundle["final"]
+    started = time.perf_counter()
+    asyncio.run(NarratorAgent(Slow(), cfg).run(state))
+    assert time.perf_counter() - started < 2 and state.stats["narrator"]["timed_out"]
+    assert all(i["narration"]["en"]["source"] == "template" for i in state.insights)
+
+
+def test_default_match_is_warmed_at_startup():
+    import time
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    s = Settings(store_provider="memory", llm_provider="template", warm_on_start=True, default_seed=40)
+    llm, info = build_llm(s)
+    svc = MatchService(s, MemoryStore(), llm, info)
+    with TestClient(create_app(s, svc)):
+        for _ in range(50):
+            if svc._hot:
+                break
+            time.sleep(0.1)
+    assert any(k.startswith("40:") for k in svc._hot)

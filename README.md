@@ -21,7 +21,7 @@ Built for the Microsoft x Premier League *Inside the Game* hackathon. All clubs,
   `POST /api/match/custom` (bring your own events), `/api/profile/{id}`, `/api/config`, `/api/health`.
 - **Browser engine = backend engine.** Both produce identical matches and insights; `backend/scripts/parity_check.sh`
   proves it on four seeds. The UI starts on its own simulator immediately and adopts the backend's agent output when it arrives.
-- **Tests:** `cd backend && pytest` (24 tests: simulator, engine, agents, grounding, retries, providers, storage, API, SSE, CORS).
+- **Tests:** `cd backend && pytest` (26 tests: simulator, engine, agents, grounding, retries, LLM time budget, startup warm-up, providers, storage, API, SSE, CORS).
 
 ## What is not
 - Not built on Microsoft Agent Framework: the orchestrator is a small in-repo implementation.
