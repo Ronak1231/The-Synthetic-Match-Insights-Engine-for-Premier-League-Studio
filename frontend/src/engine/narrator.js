@@ -1,0 +1,163 @@
+// Narrative + Personalize stages. Turns structured insights into multi-language
+// copy for different audiences, plus machine-readable broadcast overlay cues.
+import { TEAMS } from './data';
+
+const fmt = (s, p) => s.replace(/\{(\w+)\}/g, (_, k) => (p[k] !== undefined ? p[k] : `{${k}}`));
+
+// head = what happened, why = why it matters
+const T = {
+  en: {
+    goal: ['GOAL! {player} scores for {team}', 'A {xg} xG chance converted. Only about 1 in {inv} chances like this go in, and it makes it {home}–{away}.'],
+    big_chance: ['Big chance for {player} ({team})', '{xg} xG: the move broke the defensive shape and created one of the best looks of the match so far.'],
+    momentum_shift: ['{team} are taking over', 'Over the last five minutes {team} have won the territory battle with {prog} forward passes and {press} pressure actions.'],
+    press_wave: ['{team} are pressing high', '{n} pressure events in five minutes. Expect rushed passes and turnovers in midfield.'],
+    chaos: ['The game is stretched and chaotic', '{n} possession changes in five minutes. Neither side has control, which favours the more direct team.'],
+    control: ['{team} are in control', '{pct}% of the ball with few turnovers: they are setting the rhythm and making the opposition run.'],
+    sprint: ['{player} hits {speed} km/h', 'A sprint at this speed over {distance} m usually means a run in behind. Watch the space he leaves.'],
+    power_shot: ['{player} strikes it at {speed} km/h', 'Hard shots shorten the goalkeeper’s reaction window.'],
+    milestone_passes: ['{player}: {n} passes', 'He is the hub of {team}’s build-up play.'],
+    milestone_tackles: ['{player} wins tackle number {n}', 'Duels won in this zone keep breaking up the opposition’s attacks.'],
+    card: ['Yellow card: {player}', 'A booking limits how aggressively {player} can defend for the rest of the match.'],
+    key_pass: ['{player} splits the defence', 'A {dist} m pass rated {diff}/10 for difficulty, completed under pressure.'],
+  },
+  hi: {
+    goal: ['गोल! {player} ने {team} के लिए स्कोर किया', '{xg} xG का मौका गोल में बदला। ऐसे केवल लगभग 1/{inv} मौके गोल बनते हैं। स्कोर अब {home}–{away}।'],
+    big_chance: ['{player} ({team}) के लिए बड़ा मौका', '{xg} xG: इस मूव ने डिफेंस की शक्ल तोड़ी और मैच का सबसे अच्छा मौका बनाया।'],
+    momentum_shift: ['{team} हावी हो रही है', 'पिछले पाँच मिनट में {team} ने {prog} आगे के पास और {press} प्रेस के साथ मैदान पर पकड़ बनाई है।'],
+    press_wave: ['{team} ऊँचा प्रेस कर रही है', 'पाँच मिनट में {n} प्रेशर एक्शन। मिडफ़ील्ड में जल्दबाज़ी के पास और गेंद गँवाना तय है।'],
+    chaos: ['मैच बिखरा और अव्यवस्थित है', 'पाँच मिनट में {n} बार गेंद बदली। किसी का नियंत्रण नहीं, जिससे सीधा खेलने वाली टीम को फ़ायदा है।'],
+    control: ['{team} का नियंत्रण है', '{pct}% गेंद और कम टर्नओवर: वे लय तय कर रहे हैं और विपक्ष को दौड़ा रहे हैं।'],
+    sprint: ['{player} की रफ़्तार {speed} किमी/घंटा', '{distance} मीटर की इतनी तेज़ स्प्रिंट अक्सर पीछे की ओर रन होती है। खाली जगह पर नज़र रखें।'],
+    power_shot: ['{player} का शॉट {speed} किमी/घंटा', 'ज़ोरदार शॉट गोलकीपर के रिएक्शन का समय घटा देते हैं।'],
+    milestone_passes: ['{player}: {n} पास', 'वह {team} के बिल्ड-अप का केंद्र है।'],
+    milestone_tackles: ['{player} का {n}वाँ टैकल', 'इस इलाके में जीते गए डुअल विपक्ष के हमले लगातार तोड़ रहे हैं।'],
+    card: ['येलो कार्ड: {player}', 'अब {player} को बाकी मैच में डिफेंड करते समय सावधान रहना होगा।'],
+    key_pass: ['{player} ने डिफेंस चीर दिया', '{dist} मीटर का पास, कठिनाई {diff}/10, दबाव में पूरा हुआ।'],
+  },
+  es: {
+    goal: ['¡GOL! {player} marca para {team}', 'Ocasión de {xg} xG convertida. Solo 1 de cada {inv} jugadas así termina en gol. Marcador: {home}–{away}.'],
+    big_chance: ['Gran ocasión para {player} ({team})', '{xg} xG: la jugada rompió la línea defensiva y creó una de las mejores opciones del partido.'],
+    momentum_shift: ['{team} toma el control', 'En los últimos cinco minutos {team} domina el campo con {prog} pases hacia delante y {press} acciones de presión.'],
+    press_wave: ['{team} presiona alto', '{n} acciones de presión en cinco minutos. Esperen pases apresurados y pérdidas en el medio.'],
+    chaos: ['El partido está roto y caótico', '{n} cambios de posesión en cinco minutos. Nadie controla, lo que favorece al equipo más directo.'],
+    control: ['{team} controla el partido', '{pct}% de posesión con pocas pérdidas: marcan el ritmo y hacen correr al rival.'],
+    sprint: ['{player} alcanza {speed} km/h', 'Un sprint de {distance} m a esta velocidad suele ser una carrera a la espalda. Atentos al espacio que deja.'],
+    power_shot: ['{player} dispara a {speed} km/h', 'Los disparos potentes reducen el tiempo de reacción del portero.'],
+    milestone_passes: ['{player}: {n} pases', 'Es el eje de la construcción de {team}.'],
+    milestone_tackles: ['{player} gana su entrada número {n}', 'Los duelos ganados en esta zona frenan una y otra vez los ataques rivales.'],
+    card: ['Tarjeta amarilla: {player}', 'La amonestación limita cuánto puede defender {player} el resto del partido.'],
+    key_pass: ['{player} parte la defensa', 'Pase de {dist} m con dificultad {diff}/10, completado bajo presión.'],
+  },
+  ar: {
+    goal: ['هدف! {player} يسجل لصالح {team}', 'فرصة بقيمة {xg} xG تحولت إلى هدف. فقط حوالي 1 من كل {inv} فرص مماثلة تنتهي بهدف. النتيجة {home}–{away}.'],
+    big_chance: ['فرصة كبيرة لـ{player} ({team})', '{xg} xG: الحركة كسرت التنظيم الدفاعي وصنعت من أفضل فرص المباراة.'],
+    momentum_shift: ['{team} يسيطر على المباراة', 'في آخر خمس دقائق سيطر {team} على الملعب بـ{prog} تمريرة للأمام و{press} ضغطًا.'],
+    press_wave: ['{team} يضغط عاليًا', '{n} عملية ضغط في خمس دقائق. توقعوا تمريرات متسرعة وفقدان للكرة في الوسط.'],
+    chaos: ['المباراة مفتوحة وفوضوية', '{n} تغيير في الاستحواذ خلال خمس دقائق. لا أحد يتحكم، وهذا يخدم الفريق الأكثر مباشرة.'],
+    control: ['{team} يتحكم في اللعب', '{pct}% من الاستحواذ مع خسارة قليلة للكرة: يفرضون الإيقاع ويُجرون المنافس.'],
+    sprint: ['{player} يصل إلى {speed} كم/س', 'عدو بهذه السرعة لمسافة {distance} م يعني غالبًا اختراقًا خلف الدفاع. راقبوا المساحة التي يتركها.'],
+    power_shot: ['{player} يسدد بسرعة {speed} كم/س', 'التسديدات القوية تقلل زمن رد فعل الحارس.'],
+    milestone_passes: ['{player}: {n} تمريرة', 'هو محور بناء اللعب لدى {team}.'],
+    milestone_tackles: ['{player} يكسب التدخل رقم {n}', 'الالتحامات المكسوبة في هذه المنطقة توقف هجمات المنافس باستمرار.'],
+    card: ['بطاقة صفراء: {player}', 'الإنذار يحد من قدرة {player} على الدفاع بقوة في بقية المباراة.'],
+    key_pass: ['{player} يخترق الدفاع', 'تمريرة بطول {dist} م وصعوبة {diff}/10 أُنجزت تحت الضغط.'],
+  },
+  fr: {
+    goal: ['BUT ! {player} marque pour {team}', 'Occasion de {xg} xG convertie. Seulement 1 situation sur {inv} finit au fond. Score : {home}–{away}.'],
+    big_chance: ['Grosse occasion pour {player} ({team})', '{xg} xG : l’action a cassé le bloc défensif et créé l’une des meilleures situations du match.'],
+    momentum_shift: ['{team} prend le dessus', 'Sur les cinq dernières minutes, {team} gagne la bataille du terrain avec {prog} passes vers l’avant et {press} pressings.'],
+    press_wave: ['{team} presse haut', '{n} actions de pressing en cinq minutes. Attendez-vous à des passes précipitées et des pertes de balle au milieu.'],
+    chaos: ['Le match est ouvert et chaotique', '{n} changements de possession en cinq minutes. Personne ne contrôle, ce qui avantage l’équipe la plus directe.'],
+    control: ['{team} contrôle le match', '{pct} % de possession avec peu de pertes : ils imposent le rythme et font courir l’adversaire.'],
+    sprint: ['{player} atteint {speed} km/h', 'Un sprint de {distance} m à cette vitesse signifie souvent une course dans le dos. Surveillez l’espace laissé.'],
+    power_shot: ['{player} frappe à {speed} km/h', 'Les frappes puissantes réduisent le temps de réaction du gardien.'],
+    milestone_passes: ['{player} : {n} passes', 'Il est le pivot de la construction de {team}.'],
+    milestone_tackles: ['{player} remporte son {n}e tacle', 'Les duels gagnés dans cette zone cassent sans cesse les attaques adverses.'],
+    card: ['Carton jaune : {player}', 'Cet avertissement limite l’engagement défensif de {player} jusqu’à la fin du match.'],
+    key_pass: ['{player} casse la défense', 'Passe de {dist} m, difficulté {diff}/10, réussie sous pression.'],
+  },
+};
+
+const UI = {
+  en: { fullTime: 'Full time', motm: 'Player of the match', moments: 'Key moments', xg: 'xG', poss: 'possession', shots: 'shots', passAcc: 'pass accuracy', recapHead: '{home} {hs}–{as} {away}', recapLead: '{winner} take the points {hs}–{as}.', recapDraw: 'Honours even at {hs}–{as}.', following: 'Following', quiet: 'No major moments yet. Kick-off is live.' },
+  hi: { fullTime: 'फुल टाइम', motm: 'प्लेयर ऑफ़ द मैच', moments: 'अहम पल', xg: 'xG', poss: 'पज़ेशन', shots: 'शॉट', passAcc: 'पास सटीकता', recapHead: '{home} {hs}–{as} {away}', recapLead: '{winner} ने {hs}–{as} से जीत हासिल की।', recapDraw: 'मुकाबला {hs}–{as} पर बराबर रहा।', following: 'फ़ॉलो', quiet: 'अभी कोई बड़ा पल नहीं।' },
+  es: { fullTime: 'Final', motm: 'Jugador del partido', moments: 'Momentos clave', xg: 'xG', poss: 'posesión', shots: 'tiros', passAcc: 'precisión de pase', recapHead: '{home} {hs}–{as} {away}', recapLead: '{winner} se lleva los tres puntos {hs}–{as}.', recapDraw: 'Reparto de puntos: {hs}–{as}.', following: 'Siguiendo', quiet: 'Aún no hay momentos clave.' },
+  ar: { fullTime: 'نهاية المباراة', motm: 'أفضل لاعب', moments: 'اللحظات الحاسمة', xg: 'xG', poss: 'استحواذ', shots: 'تسديدات', passAcc: 'دقة التمرير', recapHead: '{home} {hs}–{as} {away}', recapLead: 'فاز {winner} بنتيجة {hs}–{as}.', recapDraw: 'تعادل بنتيجة {hs}–{as}.', following: 'متابعة', quiet: 'لا لحظات كبرى بعد.' },
+  fr: { fullTime: 'Fin du match', motm: 'Joueur du match', moments: 'Temps forts', xg: 'xG', poss: 'possession', shots: 'tirs', passAcc: 'précision des passes', recapHead: '{home} {hs}–{as} {away}', recapLead: '{winner} s’impose {hs}–{as}.', recapDraw: 'Match nul {hs}–{as}.', following: 'Suivi', quiet: 'Pas encore de temps fort.' },
+};
+
+export const ui = (lang) => UI[lang] || UI.en;
+
+export const playerName = (team, n) => TEAMS[team].players.find((p) => p.n === n)?.name ?? `#${n}`;
+
+export function narrate(insight, { lang = 'en', mode = 'casual' } = {}) {
+  const tpl = (T[lang] || T.en)[insight.kind];
+  const params = {
+    ...insight.params,
+    player: insight.player ? playerName(insight.team, insight.player) : '',
+    team: TEAMS[insight.team].name,
+  };
+  // Backend agents may supply their own text (LLM or template) for this language.
+  const supplied = insight.narration?.[lang];
+  const headline = supplied?.headline ?? fmt(tpl[0], params);
+  const why = supplied?.why ?? fmt(tpl[1], params);
+  const source = supplied?.source ?? 'local';
+
+  // Analyst mode appends the raw metrics driving the explanation.
+  let metrics = null;
+  if (mode === 'analyst' || mode === 'broadcast') {
+    const m = [];
+    if (insight.params.xg !== undefined) m.push(`xG ${insight.params.xg}`);
+    if (insight.params.speed !== undefined) m.push(`${insight.params.speed} km/h`);
+    if (insight.params.diff !== undefined) m.push(`difficulty ${insight.params.diff}/10`);
+    if (insight.params.pressure !== undefined) m.push(`pressure ${insight.params.pressure}`);
+    if (insight.params.n !== undefined && insight.kind !== 'milestone_passes' && insight.kind !== 'milestone_tackles') m.push(`n=${insight.params.n}`);
+    if (insight.params.pct !== undefined) m.push(`${insight.params.pct}%`);
+    metrics = m.join(' · ');
+  }
+  return { headline, why: mode === 'casual' || mode === 'analyst' || mode === 'player' ? why : null, metrics, source };
+}
+
+// Machine-readable lower-third / overlay cue timed to match clock.
+export function toOverlayCue(insight, lang = 'en') {
+  const n = narrate(insight, { lang, mode: 'broadcast' });
+  const duration = insight.importance >= 0.9 ? 9 : insight.importance >= 0.6 ? 7 : 5;
+  const template = insight.kind === 'goal' ? 'goal_banner' : insight.kind.startsWith('milestone') ? 'player_tag' : insight.kind === 'sprint' || insight.kind === 'power_shot' ? 'speed_chip' : 'lower_third';
+  return {
+    schema: 'overlay.cue/1',
+    id: insight.id,
+    template,
+    in_match_second: insight.t,
+    duration_s: duration,
+    lang,
+    team: insight.team,
+    player: insight.player,
+    priority: Math.round(insight.importance * 100),
+    text: { headline: n.headline, subline: n.metrics },
+    style: { accent: TEAMS[insight.team].color, safe_area: 'lower-third' },
+  };
+}
+
+export function buildRecap(snap, motm, { lang = 'en', mode = 'casual' } = {}) {
+  const u = ui(lang);
+  const { home, away } = snap.score;
+  const winner = home === away ? null : home > away ? TEAMS.home.name : TEAMS.away.name;
+  const lead = winner
+    ? fmt(u.recapLead, { winner, hs: Math.max(home, away), as: Math.min(home, away) })
+    : fmt(u.recapDraw, { hs: home, as: away });
+  const moments = [...snap.insights].sort((a, b) => b.importance - a.importance || a.t - b.t).slice(0, mode === 'analyst' ? 6 : 4).sort((a, b) => a.t - b.t);
+  const acc = (t) => (snap.team[t].passes ? Math.round((snap.team[t].passesOk / snap.team[t].passes) * 100) : 0);
+  return {
+    title: fmt(u.recapHead, { home: TEAMS.home.name, away: TEAMS.away.name, hs: home, as: away }),
+    lead,
+    moments: moments.map((m) => ({ minute: m.minute, ...narrate(m, { lang, mode }) })),
+    stats: [
+      [u.xg, snap.team.home.xg.toFixed(2), snap.team.away.xg.toFixed(2)],
+      [u.shots, snap.team.home.shots, snap.team.away.shots],
+      [u.poss, snap.possPct.home + '%', snap.possPct.away + '%'],
+      [u.passAcc, acc('home') + '%', acc('away') + '%'],
+    ],
+    motm: motm ? { name: playerName(motm.team, motm.n), team: motm.team, rating: motm.rating } : null,
+    labels: u,
+  };
+}

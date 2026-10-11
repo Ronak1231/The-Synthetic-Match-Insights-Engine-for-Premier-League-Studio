@@ -1,0 +1,172 @@
+{
+ "home": {
+  "id": "home",
+  "name": "Northgate United",
+  "short": "NGU",
+  "color": "#38f8c7",
+  "players": [
+   {
+    "n": 1,
+    "name": "Marek Voss",
+    "pos": "GK",
+    "x": 6,
+    "y": 50
+   },
+   {
+    "n": 2,
+    "name": "Tomás Reyes",
+    "pos": "RB",
+    "x": 24,
+    "y": 82
+   },
+   {
+    "n": 5,
+    "name": "Idris Okafor",
+    "pos": "CB",
+    "x": 20,
+    "y": 62
+   },
+   {
+    "n": 4,
+    "name": "Lars Halden",
+    "pos": "CB",
+    "x": 20,
+    "y": 38
+   },
+   {
+    "n": 3,
+    "name": "Kenji Arata",
+    "pos": "LB",
+    "x": 24,
+    "y": 18
+   },
+   {
+    "n": 6,
+    "name": "Dario Stein",
+    "pos": "DM",
+    "x": 38,
+    "y": 50
+   },
+   {
+    "n": 8,
+    "name": "Callum Reid",
+    "pos": "CM",
+    "x": 48,
+    "y": 68
+   },
+   {
+    "n": 10,
+    "name": "Mateo Ibarra",
+    "pos": "AM",
+    "x": 55,
+    "y": 32
+   },
+   {
+    "n": 7,
+    "name": "Jules Marchand",
+    "pos": "RW",
+    "x": 68,
+    "y": 84
+   },
+   {
+    "n": 11,
+    "name": "Samir Haddad",
+    "pos": "LW",
+    "x": 68,
+    "y": 16
+   },
+   {
+    "n": 9,
+    "name": "Erik Solheim",
+    "pos": "ST",
+    "x": 76,
+    "y": 50
+   }
+  ]
+ },
+ "away": {
+  "id": "away",
+  "name": "Ashford Rovers",
+  "short": "ASR",
+  "color": "#ff5d8f",
+  "players": [
+   {
+    "n": 1,
+    "name": "Piet Van Dijk",
+    "pos": "GK",
+    "x": 94,
+    "y": 50
+   },
+   {
+    "n": 2,
+    "name": "Rui Almeida",
+    "pos": "RB",
+    "x": 76,
+    "y": 18
+   },
+   {
+    "n": 5,
+    "name": "Tobias Krüger",
+    "pos": "CB",
+    "x": 80,
+    "y": 38
+   },
+   {
+    "n": 4,
+    "name": "Ade Bello",
+    "pos": "CB",
+    "x": 80,
+    "y": 62
+   },
+   {
+    "n": 3,
+    "name": "Nico Ferrante",
+    "pos": "LB",
+    "x": 76,
+    "y": 82
+   },
+   {
+    "n": 6,
+    "name": "Owen Gallagher",
+    "pos": "DM",
+    "x": 62,
+    "y": 50
+   },
+   {
+    "n": 8,
+    "name": "Yusuf Demir",
+    "pos": "CM",
+    "x": 52,
+    "y": 32
+   },
+   {
+    "n": 10,
+    "name": "Luka Petrović",
+    "pos": "AM",
+    "x": 45,
+    "y": 68
+   },
+   {
+    "n": 7,
+    "name": "Andre Mensah",
+    "pos": "RW",
+    "x": 32,
+    "y": 16
+   },
+   {
+    "n": 11,
+    "name": "Felix Brandt",
+    "pos": "LW",
+    "x": 32,
+    "y": 84
+   },
+   {
+    "n": 9,
+    "name": "Mikael Lund",
+    "pos": "ST",
+    "x": 24,
+    "y": 50
+   }
+  ]
+ }
+}
