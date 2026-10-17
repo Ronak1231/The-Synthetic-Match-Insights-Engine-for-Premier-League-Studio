@@ -44,8 +44,8 @@ class OpenAICompatClient:
         self.model = model
         self._url = url
         self._timeout = timeout
-        self._headers = {"Content-Type": "application/json", **(extra_headers or {})}
-        self._headers[key_header] = f"Bearer {api_key}" if key_header == "Authorization" else api_key
+        self._headers = {"Accept": "application/json", "Content-Type": "application/json", **(extra_headers or {})}
+        self._headers[key_header] = ("Bearer " + api_key) if key_header == "Authorization" else api_key
 
     async def complete_json(self, system: str, user: str, *, temperature: float = 0.3, attempts: int = 3,
                             max_wait: float = 20.0) -> dict:
@@ -72,6 +72,13 @@ class OpenAICompatClient:
                     content = payload["choices"][0]["message"]["content"]
                 except (KeyError, IndexError, TypeError) as exc:
                     raise LLMError(f"invalid provider response shape: {str(payload)[:200]}") from exc
+                if isinstance(content, list):
+                    content = "".join(
+                        part.get("text", "") for part in content
+                        if isinstance(part, dict) and isinstance(part.get("text"), str)
+                    )
+                if not isinstance(content, str) or not content.strip():
+                    raise LLMError(f"empty model content in provider response: {str(payload)[:200]}")
                 return parse_json_object(content)
             except (httpx.HTTPError, LLMError) as exc:
                 last = LLMError(f"{type(exc).__name__}: {exc}")

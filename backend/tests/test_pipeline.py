@@ -130,7 +130,7 @@ def test_llm_provider_selection_from_config():
     assert build_llm(Settings(llm_provider="template"))[0] is None
     c, info = build_llm(Settings(llm_provider="github", github_token="t"))
     assert c and info.active == "github-models" and "models.github.ai" in c._url
-    assert c._headers["Authorization"] == "Bearer t"
+    assert c._headers["Authorization"] == "Bearer " + "t"
     c, info = build_llm(Settings(llm_provider="github"))
     assert c is None and "GITHUB_TOKEN" in info.note
     c, info = build_llm(Settings(llm_provider="azure", azure_openai_endpoint="https://x.openai.azure.com",
