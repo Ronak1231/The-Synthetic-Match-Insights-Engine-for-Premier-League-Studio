@@ -21,7 +21,7 @@ Built for the Microsoft x Premier League *Inside the Game* hackathon. All clubs,
   `POST /api/match/custom` (bring your own events), `/api/profile/{id}`, `/api/config`, `/api/health`, `POST /api/match/{seed}/chat`, `GET /api/match/{seed}/whatif/moments`, `POST /api/match/{seed}/whatif`.
 - **Browser engine = backend engine.** Both produce identical matches and insights; `backend/scripts/parity_check.sh`
   proves it on four seeds. The UI starts on its own simulator immediately and adopts the backend's agent output when it arrives.
-- **Tests:** `cd backend && pytest` (79 tests: simulator, engine, agents, grounding, retries, LLM budget, providers, storage, API, SSE, CORS, what-if model, chat planning, tool facts, grounding rejection, spoiler safety, rate limits, prompt-injection handling). `parity_check.sh` also proves the Python and JS what-if models agree.
+- **Tests:** `cd backend && pytest` (89 tests: simulator, engine, agents, grounding, retries, LLM budget, providers, storage, API, SSE, CORS, what-if model, chat planning, tool facts, grounding rejection, spoiler safety, rate limits, prompt-injection handling). `parity_check.sh` also proves the Python and JS what-if models agree.
 
 ## Intelligence Lab (chat, Second Guess, analytics, film)
 A new section of the UI (`#lab`) with four tabs. Everything is computed from the synthetic events and shows its working.
@@ -101,3 +101,13 @@ real browser by its author yet.
 | Dev tooling | GitHub, GitHub Copilot, GitHub Actions (CI in `.github/workflows/ci.yml`) |
 
 Check current GitHub Models limits before the demo; they change. With no token the app still works end to end on templates.
+
+## Troubleshooting the AI model
+Open the Lab, Ask tab, and press **Check AI connection** (or `GET /api/llm/check` on the backend). It sends one tiny request and
+explains the result in plain language, without printing any secret.
+- *"answered 200 but with plain text"*: `LLM_BASE_URL` points at a web page, not the model API. With `LLM_PROVIDER=github`
+  leave `LLM_BASE_URL` empty (the default is `https://models.github.ai/inference`).
+- *"rejected the token"*: create a GitHub token with `models: read`, set `GITHUB_TOKEN`, redeploy.
+- *"404"*: wrong base URL or model id (GitHub Models ids look like `openai/gpt-4o-mini`).
+- *"rate limited"*: free-tier limit; the match warm-up at startup uses the same quota (`WARM_ON_START=false` saves it).
+Chat keeps working while the model is broken: the built-in analyst answers, and a misconfigured model is not retried for 5 minutes.

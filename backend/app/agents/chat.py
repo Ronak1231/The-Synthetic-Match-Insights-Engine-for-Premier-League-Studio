@@ -350,6 +350,7 @@ class ChatAgent:
         self.limiter = RateLimiter(settings.chat_llm_per_minute)
         self._cool_until = 0.0
         self._cool_reason = ""
+        self._cool_technical = ""
 
     # -- LLM plumbing ------------------------------------------------------------
     async def _llm(self, system: str, user: str) -> dict:
@@ -358,18 +359,29 @@ class ChatAgent:
                                       timeout=self.settings.chat_llm_timeout_s)
 
     def _trip(self, exc: Exception) -> None:
-        """Remember a failure so the next questions are answered instantly instead of waiting on a broken model."""
-        msg = str(exc) or type(exc).__name__
-        secs = 600 if any(c in msg for c in ("401", "403")) else 45 if "429" in msg else 20
+        """Remember a failure so the next questions are answered instantly instead of waiting on a broken model.
+        Configuration problems (bad token, wrong URL) cool down for minutes; a rate limit for under a minute."""
+        msg = str(exc).removeprefix("LLMError: ") or type(exc).__name__
+        if "429" in msg:
+            secs, why = 45, "is rate limited (free tier)"
+        elif any(k in msg for k in ("401", "403")):
+            secs, why = 300, "rejected the token"
+        elif any(k in msg for k in ("404", "invalid provider response", "response shape", "empty model content")):
+            secs, why = 300, "is not answering like a chat API (check LLM_BASE_URL and the model name)"
+        elif isinstance(exc, asyncio.TimeoutError):
+            secs, why = 20, "took too long"
+        else:
+            secs, why = 30, "had a problem"
         self._cool_until = time.monotonic() + secs
-        self._cool_reason = ("rate limited" if "429" in msg else "token rejected" if any(c in msg for c in ("401", "403"))
-                             else "timed out" if isinstance(exc, asyncio.TimeoutError) else msg[:60])
+        self._cool_reason, self._cool_technical = why, msg[:160]
 
     def llm_state(self, client_ok: bool) -> dict:
         if self.llm is None:
             return {"state": "off", "detail": "no language model configured; answers use the built-in analyst voice"}
         if time.monotonic() < self._cool_until:
-            return {"state": "cooldown", "detail": f"language model {self._cool_reason}; retrying in {int(self._cool_until - time.monotonic())}s"}
+            return {"state": "cooldown", "detail": f"The AI model {self._cool_reason}, so the built-in analyst answered. "
+                                                  f"Retrying in {int(self._cool_until - time.monotonic())}s.",
+                    "technical": self._cool_technical}
         if not client_ok:
             return {"state": "limited", "detail": "too many AI answers from this client this minute"}
         return {"state": "ready", "detail": ""}

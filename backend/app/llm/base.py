@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
+from urllib.parse import urlparse
 from dataclasses import dataclass
 
 import httpx
@@ -46,6 +48,32 @@ class OpenAICompatClient:
         self._timeout = timeout
         self._headers = {"Accept": "application/json", "Content-Type": "application/json", **(extra_headers or {})}
         self._headers[key_header] = ("Bearer " + api_key) if key_header == "Authorization" else api_key
+
+    @property
+    def endpoint(self) -> str:
+        """Host and path only (never headers or keys), for diagnostics."""
+        u = urlparse(self._url)
+        port = f":{u.port}" if u.port else ""
+        return f"{u.hostname or ''}{port}{u.path}"
+
+    async def probe(self) -> dict:
+        """One tiny request that reports what the provider really answers (for /api/llm/check)."""
+        body = {"model": self.model, "max_tokens": 8, "messages": [{"role": "user", "content": "Reply with the word ok."}]}
+        t0 = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=min(self._timeout, 15.0), follow_redirects=False) as client:
+                resp = await client.post(self._url, headers=self._headers, json=body)
+        except httpx.HTTPError as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"[:200]}
+        out = {"status": resp.status_code, "contentType": resp.headers.get("content-type", "")[:60],
+               "preview": resp.text[:160], "ms": round((time.perf_counter() - t0) * 1000), "json": False}
+        try:
+            payload = resp.json()
+            out["json"] = True
+            out["hasChoices"] = bool(payload.get("choices")) if isinstance(payload, dict) else False
+        except ValueError:
+            pass
+        return out
 
     async def complete_json(self, system: str, user: str, *, temperature: float = 0.3, attempts: int = 3,
                             max_wait: float = 20.0) -> dict:

@@ -48,3 +48,12 @@ export async function askMatch(seed, body, outerSignal) {
     clearTimeout(timer);
   }
 }
+
+// Asks the backend to test its AI model connection and explain any problem in plain language.
+export async function checkLlm() {
+  if (!API_URL) throw new Error('The backend is not configured (VITE_API_URL).');
+  const res = await fetch(`${API_URL}/api/llm/check`, { signal: AbortSignal.timeout(40000) });
+  if (res.status === 404) throw new Error('This backend is an older version without the AI check. Redeploy the backend.');
+  if (!res.ok) throw new Error(`The backend answered ${res.status}`);
+  return res.json();
+}

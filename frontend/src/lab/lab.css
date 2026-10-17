@@ -129,3 +129,8 @@
 }
 
 .film-opts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 22px; }
+
+.ai-check { border-radius: 14px; padding: 12px 16px; font-size: .88rem; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.ai-check.ok { border: 1px solid var(--home); background: rgba(56,248,199,.08); }
+.ai-check.bad { border: 1px solid var(--amber); background: rgba(251,191,36,.08); }
+.ai-check small { color: var(--muted); font-family: var(--font-mono); }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { askMatch, API_URL } from '../api/client';
+import { askMatch, checkLlm, API_URL } from '../api/client';
 import { explainWhatIf } from '../engine/whatif';
 import { usePrefs } from '../studio/prefs';
 import WhatIfResult from './WhatIfResult';
@@ -56,7 +56,7 @@ function BotBubble({ r, fresh }) {
       {(r.facts && Object.keys(r.facts).length > 0) && (
         <details className="msg-facts">
           <summary>How this was answered{r.evidence?.length ? ` · ${r.evidence.length} source events` : ''}</summary>
-          <pre>{JSON.stringify({ plan: r.plan, evidence_event_ids: r.evidence, facts: r.facts }, null, 1)}</pre>
+          <pre>{JSON.stringify({ plan: r.plan, ai: r.llm, evidence_event_ids: r.evidence, facts: r.facts }, null, 1)}</pre>
         </details>
       )}
     </div>
@@ -72,6 +72,7 @@ export default function AskMatch({ match, seed }) {
   const [speakOn, setSpeakOn] = useState(false);
   const [listening, setListening] = useState(false);
   const [suggestions, setSuggestions] = useState(STARTERS);
+  const [check, setCheck] = useState(null);
   const ctxRef = useRef(null);
   const logRef = useRef(null);
   const abortRef = useRef(null);
@@ -107,6 +108,11 @@ export default function AskMatch({ match, seed }) {
     }
   };
 
+  const runCheck = async () => {
+    setCheck({ pending: true });
+    try { setCheck(await checkLlm()); } catch (err) { setCheck({ ok: false, problem: String(err.message || err), hint: '' }); }
+  };
+
   const listen = () => {
     if (!SR) return;
     if (listening) { recRef.current?.stop(); return; }
@@ -133,10 +139,23 @@ export default function AskMatch({ match, seed }) {
           <input type="checkbox" checked={speakOn} onChange={(e) => setSpeakOn(e.target.checked)} disabled={!window.speechSynthesis} />
           Read answers aloud
         </label>
+        <button className="btn-ghost btn-sm" onClick={runCheck} disabled={offline || check?.pending} title="Tests the AI model the backend uses and explains any problem">
+          {check?.pending ? 'Checking…' : 'Check AI connection'}
+        </button>
         <span className={`lab-status ${offline ? 'off' : match.backend.status}`}>
           {offline ? 'Backend not configured' : match.backend.status === 'live' ? 'Backend live' : match.backend.status === 'offline' ? 'Backend unreachable' : 'Backend waking up…'}
         </span>
       </div>
+
+      {check && !check.pending && (
+        <div className={`ai-check ${check.ok ? 'ok' : 'bad'}`} role="status">
+          <b>{check.ok ? `AI model works (${check.model}, ${check.latencyMs} ms)` : check.configured === false ? 'No AI model configured' : 'AI model problem'}</b>
+          {!check.ok && <p>{check.problem}.</p>}
+          {!check.ok && check.hint && <p>{check.hint}</p>}
+          {check.endpoint && <small>Endpoint: {check.endpoint}{check.httpStatus ? ` · HTTP ${check.httpStatus}` : ''}</small>}
+          <button className="chip-btn" onClick={() => setCheck(null)}>Dismiss</button>
+        </div>
+      )}
 
       <div className="chat-log" ref={logRef} data-lenis-prevent aria-live="polite">
         {messages.length === 0 && (

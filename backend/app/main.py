@@ -16,6 +16,7 @@ from .agents.ingest import validate_events
 from .config import Settings, get_settings
 from .domain.engine import MatchEngine
 from .agents.chat import RateLimiter
+from .llm.diagnose import diagnose
 from .domain.narration import LANGS, overlay_cue, template_text
 from .domain.whatif import explain_whatif, list_moments, simulate_whatif
 from .llm.base import build_llm
@@ -94,6 +95,21 @@ def create_app(settings: Settings | None = None, service: MatchService | None = 
     @app.get("/api/health")
     async def health(request: Request):
         return {"status": "ok", "store": await svc(request).store.ping()}
+
+    @app.get("/api/llm/check")
+    async def llm_check(request: Request):
+        """Makes one tiny request to the configured model and says what is wrong in plain language."""
+        if not chat_gate.allow("llmcheck:" + client_key(request)):
+            raise HTTPException(429, "too many checks; wait a moment")
+        sv = svc(request)
+        info = {"provider": sv.llm_info.provider, "model": sv.llm_info.model}
+        if sv.llm is None:
+            return {**info, "ok": False, "configured": False, "problem": "no language model is configured",
+                    "hint": sv.llm_info.note or "Set LLM_PROVIDER and a token (see README). The app still works without one."}
+        probe = await sv.llm.probe()
+        verdict = diagnose(sv.llm_info.provider, probe)
+        return {**info, "configured": True, "endpoint": sv.llm.endpoint, "httpStatus": probe.get("status"),
+                "latencyMs": probe.get("ms"), **verdict}
 
     @app.get("/api/config")
     async def config(request: Request):

@@ -26,10 +26,10 @@ a free stack: GitHub Models, Vercel, Render and Neon. All clubs, players and dat
 | 0:55 | Second guess tab: top-headroom shot, click bars, pick a team-mate | "Seeded Monte Carlo with intervals. It only claims a better option when the ranges do not overlap." |
 | 1:15 | Analytics: click a shot on the map | "Shot map links straight to the what-if." |
 | 1:25 | Film tab (Standard length is about 105 s), press Play for 10 seconds, show Record | "A highlight film built from events, recorded in the browser." |
-| 1:40 | Export CSV, then backend trace / tests badge | "Every what-if grows a labelled counterfactual dataset. 79 tests plus Python/JS parity." |
+| 1:40 | Export CSV, then backend trace / tests badge | "Every what-if grows a labelled counterfactual dataset. 89 tests plus Python/JS parity." |
 
 ## Mapping to the judging rubric
-- **Technological implementation**: tests (79) + parity check in CI; model assumptions documented and returned with results.
+- **Technological implementation**: tests (89) + parity check in CI; model assumptions documented and returned with results.
 - **Agentic design**: plan, tool call, answer, grounding verifier; rules-first planner with LLM fallback; sanitised tool arguments; rate limits.
 - **Real-world impact**: studio segment generator, fan "what if" debates, labelled counterfactual dataset for research.
 - **UX and presentation**: four-tab lab, spoiler-free mode, voice in/out, auto-built film for the demo.
