@@ -64,9 +64,16 @@ class OpenAICompatClient:
                     continue
                 if resp.status_code >= 400:
                     raise LLMError(f"HTTP {resp.status_code}: {resp.text[:200]}")
-                content = resp.json()["choices"][0]["message"]["content"]
+                try:
+                    payload = resp.json()
+                except ValueError as exc:
+                    raise LLMError(f"invalid provider response (HTTP {resp.status_code}): {resp.text[:200]}") from exc
+                try:
+                    content = payload["choices"][0]["message"]["content"]
+                except (KeyError, IndexError, TypeError) as exc:
+                    raise LLMError(f"invalid provider response shape: {str(payload)[:200]}") from exc
                 return parse_json_object(content)
-            except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
+            except (httpx.HTTPError, LLMError) as exc:
                 last = LLMError(f"{type(exc).__name__}: {exc}")
                 if attempt + 1 < attempts:
                     await asyncio.sleep(min(max_wait, 2 ** attempt))
