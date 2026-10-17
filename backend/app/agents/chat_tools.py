@@ -142,6 +142,25 @@ def team_stats(d: MatchData, team: str, up_to_minute: int | None = None) -> dict
     return {"facts": facts, "evidence": []}
 
 
+def compare_teams(d: MatchData) -> dict:
+    """Return the comparable team totals used by natural-language comparisons."""
+    home = team_stats(d, "home")["facts"]
+    away = team_stats(d, "away")["facts"]
+    keys = ["goals", "shots", "onTarget", "xg", "possession", "passes", "passAccuracy", "tackles", "pressures", "fouls", "cards"]
+    return {
+        "facts": {
+            "home": home["team"],
+            "away": away["team"],
+            "stats": {key: {"home": home[key], "away": away[key]} for key in keys},
+        },
+        "evidence": [],
+        "table": {
+            "columns": ["Metric", home["team"], away["team"]],
+            "rows": [[key, home[key], away[key]] for key in keys],
+        },
+    }
+
+
 def player_stats(d: MatchData, team: str, n: int, up_to_minute: int | None = None) -> dict:
     s = d.snapshot(d.cap(up_to_minute))
     p = s["players"].get(f"{team}:{n}")
@@ -423,7 +442,7 @@ def digest(d: MatchData) -> dict:
 
 
 TOOLS = {
-    "match_summary": match_summary, "team_stats": team_stats, "player_stats": player_stats,
+    "match_summary": match_summary, "team_stats": team_stats, "compare_teams": compare_teams, "player_stats": player_stats,
     "top_players": top_players, "shots": shots, "goals": goals, "key_moments": key_moments,
     "phases": phases, "compare_halves": compare_halves, "momentum": momentum, "whatif": whatif,
     "records": records, "compare_players": compare_players, "discipline": discipline, "timeline": timeline,
@@ -433,6 +452,7 @@ TOOLS = {
 TOOL_SPEC = {
     "match_summary": {"up_to_minute": "int?"},
     "team_stats": {"team": "home|away", "up_to_minute": "int?"},
+    "compare_teams": {},
     "player_stats": {"team": "home|away", "n": "shirt number int"},
     "top_players": {"metric": "|".join(sorted(METRICS)), "team": "home|away?", "n": "int?"},
     "shots": {"team": "home|away?", "player": "shirt number?", "outcome": "goal|saved|off_target|blocked|missed(any non-goal)?",

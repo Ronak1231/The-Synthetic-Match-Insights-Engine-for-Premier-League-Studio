@@ -133,6 +133,26 @@ def team_stats(f: dict, mode: str, key: str) -> str:
     return out
 
 
+def compare_teams(f: dict, mode: str, key: str) -> str:
+    stats = f["stats"]
+    labels = {
+        "goals": "goals", "shots": "shots", "onTarget": "shots on target", "xg": "xG",
+        "possession": "possession", "passes": "passes", "passAccuracy": "pass accuracy",
+        "tackles": "tackles", "pressures": "pressing actions", "fouls": "fouls", "cards": "cards",
+    }
+    notable = []
+    for metric, label in labels.items():
+        home, away = stats[metric]["home"], stats[metric]["away"]
+        if home == away:
+            notable.append(f"{f['home']} and {f['away']} were level on {label} ({_f(home)} each)")
+        else:
+            leader, value, other, other_value = (
+                (f["home"], home, f["away"], away) if home > away else (f["away"], away, f["home"], home)
+            )
+            notable.append(f"{leader} had more {label} ({_f(value)} to {_f(other_value)})")
+    return "Team comparison: " + "; ".join(notable) + "."
+
+
 def player_stats(f: dict, mode: str, key: str) -> str:
     if not f.get("involved"):
         return f"{f['player']} ({f['team']}) hasn't had a touch yet."

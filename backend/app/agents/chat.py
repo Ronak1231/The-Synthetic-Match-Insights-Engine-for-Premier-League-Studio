@@ -182,7 +182,14 @@ def plan_rules(text: str, ctx: dict | None) -> dict | None:
     if has(t, "key moment", "highlight", "turning point", "important moment", "biggest moment", "best moment", "moments"):
         return {"tool": "key_moments", "args": {**({"team": team} if team else {})}}
 
-    # 8. shots and chances
+    # 8. team comparisons
+    if has(t, "each team", "both teams", "which team", "what team", "who had more", "who had the most",
+           "compare the teams", "compare both", "team comparison") and has(
+               t, "possession", "passes", "pass accuracy", "shot", "xg", "expected goal", "tackle",
+               "pressure", "foul", "card", "goal", "on target"):
+        return {"tool": "compare_teams", "args": {}}
+
+    # 9. shots and chances
     if has(t, "shot", "chance", "xg", "expected goal", "on target", "missed", "wasted", "big chance", "efficien", "finishing"):
         if has(t, "xg", "expected goal") and team and not has(t, "chance", "shot", "missed", "biggest"):
             return {"tool": "team_stats", "args": {"team": team}}
@@ -199,7 +206,7 @@ def plan_rules(text: str, ctx: dict | None) -> dict | None:
             args["outcome"] = "saved"
         return {"tool": "shots", "args": args}
 
-    # 9. team and match level
+    # 10. team and match level
     if team and has(t, "possession", "passes", "pass accuracy", "tackle", "stats", "statistic", "how did", "how many", "played", "pressure"):
         return {"tool": "team_stats", "args": {"team": team}}
     if has(t, "score", "result", "summary", "summar", "recap", "who won", "how did it end", "final", "so far", "what happened",

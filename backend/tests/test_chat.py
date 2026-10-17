@@ -128,6 +128,7 @@ def test_questions_outside_the_data_are_declined_not_answered_with_a_summary(q):
 @pytest.mark.parametrize("question,tool", [
     ("who won?", "match_summary"), ("any cards?", "discipline"), ("what was the hardest shot", "records"),
     ("how did the goals unfold", "timeline"), ("Compare Erik Solheim and Andre Mensah", "compare_players"),
+    ("Which team had more possession?", "compare_teams"), ("Who had more shots and xG?", "compare_teams"),
 ])
 def test_new_intents(question, tool):
     assert plan_rules(question, None)["tool"] == tool
@@ -158,6 +159,14 @@ def test_new_tool_facts():
         assert rec["facts"]["hardestShot"]["speedKmh"] >= 100
         tl = c.post("/api/match/40/chat", json={"message": "how did the goals unfold"}).json()
         assert tl["facts"]["goals"][0]["score"] == "1-0" and tl["facts"]["leadChanges"] >= 1
+
+
+def test_team_comparison_answers_the_question_without_an_llm():
+    with client() as c:
+        r = c.post("/api/match/40/chat", json={"message": "Which team had more possession?"}).json()
+        assert r["plan"]["tool"] == "compare_teams"
+        assert "possession" in r["answer"].lower()
+        assert r["table"]["columns"][0] == "Metric"
 
 
 # ---- LLM path with a fake model --------------------------------------------------------------
