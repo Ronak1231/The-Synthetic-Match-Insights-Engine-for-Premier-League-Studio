@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     chat_use_llm: bool = True
     chat_llm_per_minute: int = 10      # LLM-backed chat messages per client per minute (rules are not counted)
     chat_requests_per_minute: int = 40  # all chat messages per client per minute
-    chat_llm_timeout_s: float = 12.0
+    chat_llm_timeout_s: float = 9.0
     chat_max_chars: int = 300
 
     # --- Storage --------------------------------------------------------------

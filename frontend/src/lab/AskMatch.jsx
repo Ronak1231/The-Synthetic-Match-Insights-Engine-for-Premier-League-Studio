@@ -4,17 +4,39 @@ import { explainWhatIf } from '../engine/whatif';
 import { usePrefs } from '../studio/prefs';
 import WhatIfResult from './WhatIfResult';
 
-const STARTERS = ['Summarise the match', 'Who was the best player?', 'What was the biggest missed chance?', 'What if the biggest chance had been a pass?'];
+const STARTERS = ['Summarise the match', 'How did the goals unfold?', 'Who was the best player?', 'What if the biggest chance had been a pass?', 'Any records or cards?'];
 const LOCALE = { en: 'en-GB', hi: 'hi-IN', es: 'es-ES', ar: 'ar-SA', fr: 'fr-FR' };
 const SR = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
-function Bubble({ m }) {
+// Reveals the newest answer progressively so it reads like a live reply (skipped for reduced motion).
+function useTypewriter(text, active) {
+  const [n, setN] = useState(active ? 0 : text.length);
+  useEffect(() => {
+    if (!active || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined;
+    let i = 0;
+    const id = setInterval(() => {
+      i += Math.max(2, Math.ceil(text.length / 90));
+      setN(Math.min(i, text.length));
+      if (i >= text.length) clearInterval(id);
+    }, 22);
+    return () => clearInterval(id);
+  }, [text, active]);
+  return active ? text.slice(0, n) : text;
+}
+
+const LLM_LABEL = { off: 'Built-in analyst', ok: 'AI · numbers checked', cooldown: 'AI paused', rejected: 'AI text rejected', limited: 'AI limit reached', ready: 'Built-in analyst' };
+
+function Bubble({ m, fresh }) {
   if (m.role === 'user') return <div className="msg me">{m.text}</div>;
   if (m.error) return <div className="msg bot err">{m.text}</div>;
-  const r = m.reply;
+  return <BotBubble r={m.reply} fresh={fresh} />;
+}
+
+function BotBubble({ r, fresh }) {
+  const shown = useTypewriter(r.answer, fresh);
   return (
     <div className="msg bot" dir={r.lang === 'ar' ? 'rtl' : 'ltr'}>
-      <p>{r.answer}</p>
+      <p>{shown}</p>
       {r.table && r.table.rows.length > 0 && (
         <table className="an-table chat-table">
           <thead><tr>{r.table.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
@@ -23,14 +45,14 @@ function Bubble({ m }) {
       )}
       {r.viz?.type === 'whatif' && <WhatIfResult result={r.viz.result} explanation={explainWhatIf(r.viz.result)} compact />}
       <div className="msg-meta">
-        <span className={`badge ${r.source === 'llm' ? 'ai' : ''}`} title={r.source === 'llm' ? 'Phrased by a language model; every number was checked against the tool facts' : 'Written from a template over the tool facts'}>
-          {r.source === 'llm' ? 'AI · numbers checked' : 'Template answer'}
+        <span className={`badge ${r.source === 'llm' ? 'ai' : r.llm?.state === 'cooldown' || r.llm?.state === 'rejected' ? 'warn' : ''}`} title={r.llm?.detail || (r.source === 'llm' ? 'Written by a language model; every number was checked against the match data' : 'Composed from the match data by the built-in analyst')}>
+          {LLM_LABEL[r.llm?.state] || (r.source === 'llm' ? 'AI · numbers checked' : 'Built-in analyst')}
         </span>
         {r.plan && <span className="badge">{r.plan.tool} · planned by {r.plan.by}</span>}
-        {r.grounded === false && <span className="badge warn" title="The model's wording contained a number that was not in the facts, so the template answer is shown">model text rejected</span>}
-        <span className="badge">{Math.round(r.ms)} ms</span>
+                <span className="badge">{Math.round(r.ms)} ms</span>
       </div>
       {r.note && <p className="msg-note">{r.note}</p>}
+      {r.llm?.detail && r.source !== 'llm' && r.llm.state !== 'off' && <p className="msg-note">{r.llm.detail}</p>}
       {(r.facts && Object.keys(r.facts).length > 0) && (
         <details className="msg-facts">
           <summary>How this was answered{r.evidence?.length ? ` · ${r.evidence.length} source events` : ''}</summary>
@@ -120,11 +142,11 @@ export default function AskMatch({ match, seed }) {
         {messages.length === 0 && (
           <div className="chat-empty">
             <h4>Ask anything about this match</h4>
-            <p>Answers are computed from the match events by tools, then phrased. Try “What if Mateo Ibarra had squared it in the 23rd minute?” and follow up with “what if he had carried it instead?”.</p>
+            <p>Ask in your own words: who dominated, was a player wasteful, compare two players, any cards or records, or “What if Mateo Ibarra had squared it in the 23rd minute?”. Answers come from the match data, and anything outside it is said plainly.</p>
             {offline && <p className="msg-note">The chat needs the backend API. Set <code>VITE_API_URL</code>; “Second guess”, “Analytics” and “Match film” work without it.</p>}
           </div>
         )}
-        {messages.map((m, i) => <Bubble key={i} m={m} />)}
+        {messages.map((m, i) => <Bubble key={i} m={m} fresh={i === messages.length - 1} />)}
         {busy && <div className="msg bot typing"><i /><i /><i /></div>}
       </div>
 

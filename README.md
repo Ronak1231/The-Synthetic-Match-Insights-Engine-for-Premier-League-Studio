@@ -21,24 +21,29 @@ Built for the Microsoft x Premier League *Inside the Game* hackathon. All clubs,
   `POST /api/match/custom` (bring your own events), `/api/profile/{id}`, `/api/config`, `/api/health`, `POST /api/match/{seed}/chat`, `GET /api/match/{seed}/whatif/moments`, `POST /api/match/{seed}/whatif`.
 - **Browser engine = backend engine.** Both produce identical matches and insights; `backend/scripts/parity_check.sh`
   proves it on four seeds. The UI starts on its own simulator immediately and adopts the backend's agent output when it arrives.
-- **Tests:** `cd backend && pytest` (65 tests: simulator, engine, agents, grounding, retries, LLM budget, providers, storage, API, SSE, CORS, what-if model, chat planning, tool facts, grounding rejection, spoiler safety, rate limits, prompt-injection handling). `parity_check.sh` also proves the Python and JS what-if models agree.
+- **Tests:** `cd backend && pytest` (79 tests: simulator, engine, agents, grounding, retries, LLM budget, providers, storage, API, SSE, CORS, what-if model, chat planning, tool facts, grounding rejection, spoiler safety, rate limits, prompt-injection handling). `parity_check.sh` also proves the Python and JS what-if models agree.
 
 ## Intelligence Lab (chat, Second Guess, analytics, film)
 A new section of the UI (`#lab`) with four tabs. Everything is computed from the synthetic events and shows its working.
-- **Ask the match** (`POST /api/match/{seed}/chat`): natural-language questions. `backend/app/agents/chat.py` plans the
-  question (rules first, an LLM only when the rules cannot place it), calls a tool from `chat_tools.py` (summary, goals,
-  players, shots, phases, momentum, what-if...), then phrases the result. LLM wording is accepted only if every number
-  exists in the tool facts; otherwise the template answer is shown. Follow-ups work ("what if he had carried it?"),
-  an optional spoiler-free mode hides everything after the live clock, and voice in/out uses the browser's Web Speech API.
+- **Ask the match** (`POST /api/match/{seed}/chat`): ask in your own words. Rules answer common questions instantly with an
+  insight-driven analyst voice (`nlg.py`: "wasteful finishing", "had the ball but not the chances", comebacks), and say plainly
+  when something is outside the data (fixtures, real clubs). With an LLM configured, one call writes a natural answer from a
+  digest of the whole match plus a tool result, so unexpected questions work too; the model may request one tool (a what-if,
+  a player comparison) in the same exchange. LLM text is accepted only if every number, and every scoreline pair, exists in
+  the data; otherwise the built-in answer is used. A failing LLM (429, bad token) trips a cooldown so answers stay instant, and
+  the UI says why the AI was not used. Tools: summary, goals, timeline, team and player stats, comparisons, leaders, shots,
+  records, cards and fouls, phases, halves, momentum, key moments, what-if. Follow-ups work, spoiler-free mode hides the
+  future, voice in/out uses the browser's Web Speech API.
 - **Second guess** (`backend/app/domain/whatif.py`, JS twin `frontend/src/engine/whatif.js`): pick a shot, see seeded
   Monte Carlo odds for shooting versus carrying or passing to each team-mate, with 95% intervals. A better option is only
   claimed when the intervals do not overlap. Runs in the browser, so it works without the backend. The CSV export is a
   labelled counterfactual dataset (one row per shot and option).
 - **Analytics**: xG race, chances per 15 minutes, shot map (click a shot to second-guess it), pass network, zone control,
   player leaders. Follows the live clock if you tick the box.
-- **Match film**: a canvas-rendered highlight film (title, six key moments each followed by a second-guess card, outro;
-  about 88 s) in the chosen language and audience mode. "Record as video" saves a WebM with the browser's
-  MediaRecorder; nothing is uploaded.
+- **Match film**: a canvas-rendered analytics film built from the events. Options: length (Short ~80 s, Standard ~105 s,
+  Extended ~2:40, Full story ~3-4 min), second-guess cards on/off, analytics cards (half-time and full-time stats, xG race,
+  shot map, top performers) on/off, and a focus on one team or player. Each key moment shows a live stats panel; the language
+  and audience mode follow the studio. "Record as video" saves a WebM with the browser's MediaRecorder; nothing is uploaded.
 
 Model assumptions are stated in `whatif.py` and returned with every result: the events log the ball and the actors, not all
 22 players, so team-mates are placed from formation slots, attackers push forward as the ball does, and pressure is

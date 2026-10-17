@@ -318,10 +318,115 @@ def whatif(d: MatchData, team: str | None = None, player: int | None = None, min
             "explanation": explain_whatif(result)}
 
 
+def records(d: MatchData, up_to_minute: int | None = None) -> dict:
+    """Standout numbers: hardest shot, longest and hardest-to-complete passes, fastest sprint, biggest chance."""
+    cap = d.cap(up_to_minute)
+    ev = [e for e in d.events if cap is None or e["t"] <= cap]
+    shots_ = [e for e in ev if e["type"] == "shot"]
+    passes_ = [e for e in ev if e["type"] == "pass"]
+    ok = [e for e in passes_ if e["success"]]
+    sprints = [e for e in ev if e["type"] == "sprint"]
+    facts: dict = {}
+    if shots_:
+        e = max(shots_, key=lambda x: x["speed"])
+        facts["hardestShot"] = {"player": pname(e["team"], e["player"]), "team": team_label(e["team"]), "speedKmh": e["speed"],
+                                "minute": e["minute"], "outcome": e["outcome"].replace("_", " ")}
+        e = max(shots_, key=lambda x: x["xg"])
+        facts["biggestChance"] = {"player": pname(e["team"], e["player"]), "team": team_label(e["team"]), "xg": e["xg"],
+                                  "minute": e["minute"], "outcome": e["outcome"].replace("_", " ")}
+    if ok:
+        e = max(ok, key=lambda x: x["distance"])
+        facts["longestPass"] = {"player": pname(e["team"], e["player"]), "to": pname(e["team"], e["to_player"]),
+                                "metres": e["distance"], "minute": e["minute"]}
+        e = max(ok, key=lambda x: x["difficulty"])
+        facts["hardestPassCompleted"] = {"player": pname(e["team"], e["player"]), "difficulty": e["difficulty"],
+                                         "metres": e["distance"], "minute": e["minute"]}
+        e = max(ok, key=lambda x: x["ballSpeed"])
+        facts["fastestPass"] = {"player": pname(e["team"], e["player"]), "speedKmh": e["ballSpeed"], "minute": e["minute"]}
+    if sprints:
+        e = max(sprints, key=lambda x: x["speed"])
+        facts["fastestSprint"] = {"player": pname(e["team"], e["player"]), "team": team_label(e["team"]),
+                                  "speedKmh": e["speed"], "metres": e["distance"], "minute": e["minute"]}
+    if not facts:
+        return {"error": "no events yet"}
+    return {"facts": facts, "evidence": [],
+            "table": {"columns": ["Record", "Who", "Value", "Min"], "rows": [
+                [k, v.get("player"), v.get("speedKmh") or v.get("xg") or v.get("metres") or v.get("difficulty"), v.get("minute")]
+                for k, v in facts.items()]}}
+
+
+def compare_players(d: MatchData, team_a: str, n_a: int, team_b: str, n_b: int) -> dict:
+    a, b = player_stats(d, team_a, n_a), player_stats(d, team_b, n_b)
+    if "error" in a or "error" in b:
+        return {"error": "unknown player"}
+    fa, fb = a["facts"], b["facts"]
+    if not (fa.get("involved") and fb.get("involved")):
+        return {"error": "one of the players has not been involved yet"}
+    keys = ["rating", "goals", "shots", "xg", "passes", "passAccuracy", "tackles", "sprints", "topSpeed"]
+    return {"facts": {"a": fa, "b": fb}, "evidence": a["evidence"][:4] + b["evidence"][:4],
+            "table": {"columns": ["", fa["player"], fb["player"]], "rows": [[k, fa[k], fb[k]] for k in keys]}}
+
+
+def discipline(d: MatchData, up_to_minute: int | None = None) -> dict:
+    s = d.snapshot(d.cap(up_to_minute))
+    cap = d.cap(up_to_minute)
+    cards = [{"minute": e["minute"], "player": pname(e["team"], e["player"]), "team": team_label(e["team"]), "card": e["card"]}
+             for e in d.events if e["type"] == "card" and (cap is None or e["t"] <= cap)]
+    facts = {"fouls": {k: s["team"][k]["fouls"] for k in ("home", "away")}, "cards": cards,
+             "home": team_label("home"), "away": team_label("away")}
+    return {"facts": facts, "evidence": [e["id"] for e in d.events if e["type"] == "card"][:6]}
+
+
+def timeline(d: MatchData) -> dict:
+    score = {"home": 0, "away": 0}
+    steps, lead_changes, prev_lead, last_leader, trailed = [], 0, 0, 0, set()
+    for e in d.events:
+        if e["type"] != "goal":
+            continue
+        score = dict(e["score"])
+        lead = (score["home"] > score["away"]) - (score["home"] < score["away"])
+        if lead != 0:
+            if last_leader and lead != last_leader:
+                lead_changes += 1
+            last_leader = lead
+        if prev_lead == 1 and lead <= 0:
+            trailed.add("away")
+        if prev_lead == -1 and lead >= 0:
+            trailed.add("home")
+        prev_lead = lead
+        steps.append({"minute": e["minute"], "score": f"{score['home']}-{score['away']}", "team": team_label(e["team"]),
+                      "player": pname(e["team"], e["player"])})
+    facts = {"home": team_label("home"), "away": team_label("away"), "goals": steps, "leadChanges": lead_changes,
+             "fightBack": [team_label(x) for x in sorted(trailed)], "finalScore": score,
+             "firstGoal": steps[0] if steps else None, "lastGoal": steps[-1] if steps else None}
+    return {"facts": facts, "evidence": [], "table": {"columns": ["Min", "Score", "Scorer"],
+                                                       "rows": [[s["minute"], s["score"], s["player"]] for s in steps]}}
+
+
+def digest(d: MatchData) -> dict:
+    """Compact picture of the whole match (as of ``as_of``). The LLM answers open questions from this and
+    from a tool result; its answer must only use numbers found here."""
+    out: dict = {"asOfMinute": d.snapshot()["minute"], "complete": d.complete,
+                 "teams": {k: {"name": team_label(k), "short": TEAMS[k]["short"]} for k in TEAMS},
+                 "summary": match_summary(d)["facts"],
+                 "teamStats": {k: team_stats(d, k)["facts"] for k in TEAMS},
+                 "topPlayers": top_players(d, "rating", n=6)["facts"]["leaders"],
+                 "biggestChances": shots(d, limit=5)["facts"]["biggest"],
+                 "keyMoments": key_moments(d, n=8)["facts"]["moments"],
+                 "records": records(d).get("facts", {}), "discipline": discipline(d)["facts"]}
+    ph = phases(d)
+    out["periods"] = ph["facts"]["windows"]
+    if d.events and d.complete:
+        out["timeline"] = timeline(d)["facts"]
+    out["roster"] = {k: [f"{p['n']} {p['name']} ({p['pos']})" for p in TEAMS[k]["players"]] for k in TEAMS}
+    return out
+
+
 TOOLS = {
     "match_summary": match_summary, "team_stats": team_stats, "player_stats": player_stats,
     "top_players": top_players, "shots": shots, "goals": goals, "key_moments": key_moments,
     "phases": phases, "compare_halves": compare_halves, "momentum": momentum, "whatif": whatif,
+    "records": records, "compare_players": compare_players, "discipline": discipline, "timeline": timeline,
 }
 
 # Argument schemas shown to the LLM planner and enforced on its output.
@@ -338,4 +443,8 @@ TOOL_SPEC = {
     "compare_halves": {},
     "momentum": {"minute": "int?"},
     "whatif": {"team": "home|away?", "player": "shirt number?", "minute": "int?", "alternative": "pass|carry?"},
+    "records": {"up_to_minute": "int?"},
+    "compare_players": {"team_a": "home|away", "n_a": "shirt number", "team_b": "home|away", "n_b": "shirt number"},
+    "discipline": {"up_to_minute": "int?"},
+    "timeline": {},
 }

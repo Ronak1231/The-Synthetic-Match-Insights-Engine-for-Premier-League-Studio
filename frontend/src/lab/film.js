@@ -1,6 +1,6 @@
 // Pure rendering code for the analytics film: plan building + canvas drawing (no React).
 import { TEAMS } from '../engine/data';
-import { createEngine } from '../engine/engine';
+import { createEngine, playerRating } from '../engine/engine';
 import { narrate } from '../engine/narrator';
 import { explainWhatIf, simulateWhatIf } from '../engine/whatif';
 import { nameOf } from './analytics';
@@ -17,6 +17,7 @@ const CLIP = 7.5;
 const SECOND = 6;
 const TITLE = 3.2;
 const OUTRO = 3.5;
+const CARD = 6.5;
 export const LOCALE = { en: 'en-GB', hi: 'hi-IN', es: 'es-ES', ar: 'ar-SA', fr: 'fr-FR' };
 
 const px = (x) => PX + (x / 100) * PW;
@@ -92,33 +93,83 @@ function ballAt(pts, mt) {
   return pts[pts.length - 1];
 }
 
-export function buildFilmPlan(events, lang, mode) {
-  {
-    const eng = createEngine();
-    const picks = [];
-    for (const ev of events) for (const ins of eng.ingest(ev)) if (ins.importance >= 0.7) picks.push(ins);
-    const top = picks.sort((a, b) => b.importance - a.importance || a.t - b.t).slice(0, 6).sort((a, b) => a.t - b.t);
-    const goals = events.filter((e) => e.type === 'goal');
-    const shotsAll = events.filter((e) => e.type === 'shot');
-    const segs = [{ kind: 'title', dur: TITLE }];
-    for (const ins of top) {
-      const shot = ins.kind === 'big_chance' ? shotsAll.find((s) => s.id === ins.eventId) : ins.kind === 'goal' ? [...shotsAll].reverse().find((s) => s.id < ins.eventId && s.team === ins.team) : null;
-      const t0 = Math.max(0, ins.t - 24);
-      const t1 = ins.t + 4;
-      const evs = events.filter((e) => e.t >= t0 - 6 && e.t <= t1);
-      const n = narrate(ins, { lang, mode: mode === 'analyst' ? 'analyst' : 'casual' });
-      segs.push({ kind: 'clip', dur: CLIP, t0, t1, ins, evs, path: ballPath(evs), head: n.headline, why: n.why || n.metrics || '' });
-      if (shot) {
-        const result = simulateWhatIf(events, shot.id);
-        segs.push({ kind: 'second', dur: SECOND, ins, shot, result, text: explainWhatIf(result) });
-      }
-    }
-    segs.push({ kind: 'outro', dur: OUTRO });
-    const total = segs.reduce((s, x) => s + x.dur, 0);
-    let acc = 0;
-    for (const s of segs) { s.start = acc; acc += s.dur; }
-    return { segs, total, goals, shotsAll };
+export const PRESETS = {
+  short: { label: 'Short', moments: 3, hint: 'about 80 seconds' },
+  standard: { label: 'Standard', moments: 5, hint: 'about 105 seconds, demo-safe' },
+  extended: { label: 'Extended', moments: 9, hint: 'about 2 minutes 40' },
+  full: { label: 'Full story', moments: 14, hint: 'about 3 to 4 minutes' },
+};
+export const DEFAULT_FILM = { preset: 'standard', secondGuess: true, cards: true, focus: 'all' };
+
+const copyStats = (snap) => ({ team: JSON.parse(JSON.stringify(snap.team)), possPct: { ...snap.possPct }, score: { ...snap.score } });
+
+// One pass over the match capturing team stats at the moments the film needs.
+function statsAtTimes(events, times) {
+  const want = [...new Set(times)].sort((a, b) => a - b);
+  const out = {};
+  const eng = createEngine();
+  let i = 0;
+  for (const ev of events) {
+    while (i < want.length && ev.t > want[i]) out[want[i++]] = copyStats(eng.snapshot());
+    eng.ingest(ev);
   }
+  const final = eng.snapshot();
+  while (i < want.length) out[want[i++]] = copyStats(final);
+  out.final = { ...copyStats(final), players: JSON.parse(JSON.stringify(final.players)) };
+  return out;
+}
+
+const matchesFocus = (ins, focus) => {
+  if (focus === 'all') return true;
+  if (focus === 'home' || focus === 'away') return ins.team === focus;
+  const [team, n] = focus.split(':');
+  return ins.team === team && (String(ins.player) === n || ins.player === null);
+};
+
+export function buildFilmPlan(events, lang, mode, options = DEFAULT_FILM) {
+  const opt = { ...DEFAULT_FILM, ...options };
+  const eng = createEngine();
+  const picks = [];
+  const floor = opt.preset === 'short' || opt.preset === 'standard' ? 0.7 : 0.5;
+  for (const ev of events) for (const ins of eng.ingest(ev)) if (ins.importance >= floor && matchesFocus(ins, opt.focus)) picks.push(ins);
+  const n = PRESETS[opt.preset]?.moments ?? 6;
+  const top = picks.sort((a, b) => b.importance - a.importance || a.t - b.t).slice(0, n).sort((a, b) => a.t - b.t);
+  const goals = events.filter((e) => e.type === 'goal');
+  const shotsAll = events.filter((e) => e.type === 'shot');
+  const stats = statsAtTimes(events, [...top.map((i) => i.t), 2700, 5400]);
+
+  const segs = [{ kind: 'title', dur: TITLE }];
+  let halftimeDone = !opt.cards;
+  const halftime = () => { segs.push({ kind: 'stats', dur: CARD, at: 2700, title: 'HALF-TIME STATS', stats: stats[2700] }); halftimeDone = true; };
+  for (const ins of top) {
+    if (!halftimeDone && ins.t > 2700) halftime();
+    const shot = ins.kind === 'big_chance' ? shotsAll.find((s) => s.id === ins.eventId) : ins.kind === 'goal' ? [...shotsAll].reverse().find((s) => s.id < ins.eventId && s.team === ins.team) : null;
+    const t0 = Math.max(0, ins.t - 24);
+    const t1 = ins.t + 4;
+    const evs = events.filter((e) => e.t >= t0 - 6 && e.t <= t1);
+    const nar = narrate(ins, { lang, mode: mode === 'analyst' ? 'analyst' : 'casual' });
+    segs.push({ kind: 'clip', dur: CLIP, t0, t1, ins, evs, path: ballPath(evs), head: nar.headline, why: nar.why || nar.metrics || '', st: stats[ins.t] });
+    if (shot && opt.secondGuess) {
+      const result = simulateWhatIf(events, shot.id);
+      segs.push({ kind: 'second', dur: SECOND, ins, shot, result, text: explainWhatIf(result) });
+    }
+  }
+  if (opt.cards) {
+    if (!halftimeDone) halftime();
+    segs.push({ kind: 'xgrace', dur: CARD, title: 'EXPECTED GOALS RACE' });
+    segs.push({ kind: 'shotmap', dur: CARD, title: 'EVERY SHOT' });
+    const players = Object.values(stats.final.players)
+      .map((p) => ({ ...p, rating: playerRating(p) }))
+      .sort((a, b) => b.rating - a.rating)
+      .slice(0, 3);
+    segs.push({ kind: 'motm', dur: CARD, title: 'TOP PERFORMERS', players });
+    segs.push({ kind: 'stats', dur: CARD, at: 5400, title: 'FULL-TIME STATS', stats: stats.final });
+  }
+  segs.push({ kind: 'outro', dur: OUTRO });
+  const total = segs.reduce((sum, x) => sum + x.dur, 0);
+  let acc = 0;
+  for (const sg of segs) { sg.start = acc; acc += sg.dur; }
+  return { segs, total, goals, shotsAll };
 }
 
 function scoreAt(goals, t) {
@@ -130,6 +181,156 @@ function xgAt(shots, t) {
   const x = { home: 0, away: 0 };
   for (const s of shots) if (s.t <= t) x[s.team] += s.xg;
   return x;
+}
+
+
+function drawBars(ctx, rows, x, y, w, u) {
+  rows.forEach((r, i) => {
+    const yy = y + i * 58;
+    const tot = (r.h + r.a) || 1;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8b94ab';
+    ctx.font = '600 16px "JetBrains Mono", monospace';
+    ctx.fillText(r.label.toUpperCase(), x + w / 2, yy);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = TEAMS.home.color;
+    ctx.font = '700 26px "DM Sans", system-ui, sans-serif';
+    ctx.fillText(r.fh, x, yy + 32);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = TEAMS.away.color;
+    ctx.fillText(r.fa, x + w, yy + 32);
+    const bw = w - 150;
+    const bx = x + 75;
+    const e = ease(clamp(u * 2 - i * 0.08, 0, 1));
+    ctx.fillStyle = 'rgba(255,255,255,.07)';
+    rrect(ctx, bx, yy + 14, bw, 14, 7);
+    ctx.fill();
+    ctx.fillStyle = TEAMS.home.color;
+    rrect(ctx, bx, yy + 14, Math.max(6, (bw * (r.h / tot)) * e), 14, 7);
+    ctx.fill();
+    ctx.fillStyle = TEAMS.away.color;
+    const aw = Math.max(6, (bw * (r.a / tot)) * e);
+    rrect(ctx, bx + bw - aw, yy + 14, aw, 14, 7);
+    ctx.fill();
+  });
+}
+
+function drawCard(ctx, seg, u, plan) {
+  const accent = '#8b5cf6';
+  ctx.textAlign = 'left';
+  ctx.font = '700 34px "Bricolage Grotesque", system-ui, sans-serif';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(seg.title, 40, 62);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = accent;
+  ctx.font = '600 20px "JetBrains Mono", monospace';
+  ctx.fillText('◆ ANALYTICS', CW - 40, 60);
+  ctx.fillStyle = 'rgba(255,255,255,.04)';
+  rrect(ctx, 40, 96, CW - 80, 600, 18);
+  ctx.fill();
+
+  if (seg.kind === 'stats') {
+    const T = seg.stats.team;
+    const acc = (t) => (T[t].passes ? Math.round((T[t].passesOk / T[t].passes) * 100) : 0);
+    const rows = [
+      { label: 'Possession', h: seg.stats.possPct.home, a: seg.stats.possPct.away, fh: `${seg.stats.possPct.home}%`, fa: `${seg.stats.possPct.away}%` },
+      { label: 'Shots', h: T.home.shots, a: T.away.shots, fh: T.home.shots, fa: T.away.shots },
+      { label: 'On target', h: T.home.onTarget, a: T.away.onTarget, fh: T.home.onTarget, fa: T.away.onTarget },
+      { label: 'Expected goals', h: T.home.xg, a: T.away.xg, fh: T.home.xg.toFixed(2), fa: T.away.xg.toFixed(2) },
+      { label: 'Pass accuracy', h: acc('home'), a: acc('away'), fh: `${acc('home')}%`, fa: `${acc('away')}%` },
+      { label: 'Tackles', h: T.home.tackles, a: T.away.tackles, fh: T.home.tackles, fa: T.away.tackles },
+      { label: 'Pressures', h: T.home.pressures, a: T.away.pressures, fh: T.home.pressures, fa: T.away.pressures },
+    ];
+    ctx.textAlign = 'left';
+    ctx.fillStyle = TEAMS.home.color;
+    ctx.font = '700 30px "Bricolage Grotesque", system-ui, sans-serif';
+    ctx.fillText(TEAMS.home.name, 110, 150);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = TEAMS.away.color;
+    ctx.fillText(TEAMS.away.name, CW - 110, 150);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`${seg.stats.score.home} – ${seg.stats.score.away}`, CW / 2, 150);
+    drawBars(ctx, rows, 110, 190, CW - 220, u);
+  } else if (seg.kind === 'xgrace') {
+    const X0 = 110;
+    const Y0 = 150;
+    const w = CW - 220;
+    const h = 480;
+    const max = Math.max(1, ...plan.shotsAll.map(() => 0), xgAt(plan.shotsAll, 5400).home, xgAt(plan.shotsAll, 5400).away) * 1.1;
+    ctx.strokeStyle = 'rgba(255,255,255,.1)';
+    ctx.lineWidth = 1;
+    for (let k = 0; k <= 4; k++) {
+      const y = Y0 + h - (k / 4) * h;
+      ctx.beginPath(); ctx.moveTo(X0, y); ctx.lineTo(X0 + w, y); ctx.stroke();
+      ctx.fillStyle = '#8b94ab'; ctx.textAlign = 'right'; ctx.font = '14px "JetBrains Mono", monospace';
+      ctx.fillText(((k / 4) * max).toFixed(1), X0 - 10, y + 5);
+    }
+    const reveal = ease(clamp(u * 1.4, 0, 1)) * 5400;
+    for (const team of ['home', 'away']) {
+      ctx.strokeStyle = TEAMS[team].color; ctx.lineWidth = 4; ctx.beginPath();
+      let first = true;
+      for (let t = 0; t <= reveal; t += 30) {
+        const x = X0 + (t / 5400) * w;
+        const y = Y0 + h - (xgAt(plan.shotsAll, t)[team] / max) * h;
+        if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    for (const g of plan.goals) {
+      if (g.t > reveal) continue;
+      const x = X0 + (g.t / 5400) * w;
+      const y = Y0 + h - (xgAt(plan.shotsAll, g.t)[g.team] / max) * h;
+      ctx.fillStyle = '#05070d'; ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.textAlign = 'center'; ctx.fillStyle = '#8b94ab'; ctx.font = '14px "JetBrains Mono", monospace';
+    [0, 15, 30, 45, 60, 75, 90].forEach((m) => ctx.fillText(`${m}'`, X0 + (m / 90) * w, Y0 + h + 26));
+    ctx.textAlign = 'left'; ctx.fillStyle = '#b6bfd4'; ctx.font = '400 18px "DM Sans", system-ui, sans-serif';
+    ctx.fillText('Gold rings are goals. Higher means more chance quality created.', X0, 118);
+  } else if (seg.kind === 'shotmap') {
+    const shots = plan.shotsAll;
+    const mx = 120;
+    const mw = CW - 240;
+    const mh = Math.round((mw * 68) / 105);
+    const sx0 = mx;
+    const sy0 = 110;
+    ctx.fillStyle = '#07151a'; rrect(ctx, sx0, sy0, mw, Math.min(mh, 560), 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 2;
+    const H2 = Math.min(mh, 560);
+    ctx.strokeRect(sx0 + 6, sy0 + 6, mw - 12, H2 - 12);
+    ctx.beginPath(); ctx.moveTo(sx0 + mw / 2, sy0 + 6); ctx.lineTo(sx0 + mw / 2, sy0 + H2 - 6); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sx0 + mw / 2, sy0 + H2 / 2, H2 * 0.135, 0, Math.PI * 2); ctx.stroke();
+    const shown = Math.floor(ease(clamp(u * 1.3, 0, 1)) * shots.length);
+    shots.slice(0, shown).forEach((s) => {
+      const x = sx0 + (s.from.x / 100) * mw;
+      const y = sy0 + (s.from.y / 100) * H2;
+      const r = 6 + s.xg * 46;
+      ctx.globalAlpha = s.outcome === 'goal' ? 1 : 0.6;
+      ctx.fillStyle = TEAMS[s.team].color;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      if (s.outcome === 'off_target' || s.outcome === 'blocked') { ctx.strokeStyle = TEAMS[s.team].color; ctx.lineWidth = 3; ctx.stroke(); } else ctx.fill();
+      if (s.outcome === 'goal') { ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 4; ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    });
+    ctx.textAlign = 'left'; ctx.fillStyle = '#b6bfd4'; ctx.font = '400 17px "DM Sans", system-ui, sans-serif';
+    ctx.fillText('Circle size = chance quality (xG) · filled = on target · outline = off target or blocked · gold ring = goal', 120, 100 + H2 + 40);
+  } else if (seg.kind === 'motm') {
+    seg.players.forEach((p, i) => {
+      const y = 150 + i * 160;
+      const e = ease(clamp(u * 2 - i * 0.25, 0, 1));
+      ctx.globalAlpha = e;
+      ctx.fillStyle = 'rgba(255,255,255,.05)'; rrect(ctx, 110, y, CW - 220, 130, 16); ctx.fill();
+      ctx.fillStyle = TEAMS[p.team].color; ctx.fillRect(110, y, 8, 130);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = '700 34px "Bricolage Grotesque", system-ui, sans-serif';
+      ctx.fillText(`${i + 1}. ${nameOf(p.team, p.n)}`, 150, y + 52);
+      ctx.fillStyle = '#b6bfd4'; ctx.font = '400 20px "DM Sans", system-ui, sans-serif';
+      ctx.fillText(`${TEAMS[p.team].name} · ${p.goals} goals · ${p.shots} shots (${p.xg.toFixed(2)} xG) · ${p.passes} passes · ${p.tackles} tackles`, 150, y + 92);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#fbbf24'; ctx.font = '700 54px "Bricolage Grotesque", system-ui, sans-serif';
+      ctx.fillText(p.rating.toFixed(1), CW - 150, y + 82);
+      ctx.globalAlpha = 1;
+    });
+  }
 }
 
 export function drawFrame(ctx, plan, T, lang) {
@@ -163,6 +364,10 @@ export function drawFrame(ctx, plan, T, lang) {
     return;
   }
 
+  if (seg.kind === 'stats' || seg.kind === 'xgrace' || seg.kind === 'shotmap' || seg.kind === 'motm') {
+    drawCard(ctx, seg, u, plan);
+    return;
+  }
   const clip = seg.kind === 'clip';
   const mt = clip ? seg.t0 + (seg.t1 - seg.t0) * u : seg.ins.t;
   const score = scoreAt(plan.goals, mt);
@@ -289,9 +494,20 @@ export function drawFrame(ctx, plan, T, lang) {
       rrect(ctx, RX + 22, y + 12, Math.max(8, 326 * (xg[t] / mx)), 14, 7);
       ctx.fill();
     });
+    const T = seg.st.team;
+    const acc = (t) => (T[t].passes ? Math.round((T[t].passesOk / T[t].passes) * 100) : 0);
     ctx.fillStyle = '#8b94ab';
-    ctx.font = '400 18px "DM Sans", system-ui, sans-serif';
-    wrap(ctx, 'Computed from every shot so far. Switch the language and audience mode above to change the narration.', RX + 22, PY + 260, 326, 26, 5);
+    ctx.font = '600 15px "JetBrains Mono", monospace';
+    ctx.fillText('MATCH STATS', RX + 22, PY + 262);
+    [['Possession', `${seg.st.possPct.home}%`, `${seg.st.possPct.away}%`], ['Shots', T.home.shots, T.away.shots], ['On target', T.home.onTarget, T.away.onTarget],
+      ['Pass accuracy', `${acc('home')}%`, `${acc('away')}%`], ['Pressures', T.home.pressures, T.away.pressures]].forEach((row, i) => {
+      const y = PY + 296 + i * 34;
+      ctx.font = '700 20px "DM Sans", system-ui, sans-serif';
+      ctx.textAlign = 'left'; ctx.fillStyle = TEAMS.home.color; ctx.fillText(String(row[1]), RX + 22, y);
+      ctx.textAlign = 'right'; ctx.fillStyle = TEAMS.away.color; ctx.fillText(String(row[2]), RX + 348, y);
+      ctx.textAlign = 'center'; ctx.fillStyle = '#8b94ab'; ctx.font = '400 16px "DM Sans", system-ui, sans-serif'; ctx.fillText(row[0], RX + 185, y);
+    });
+    ctx.textAlign = 'left';
   } else {
     const r = seg.result;
     ctx.fillText('WHAT COULD HAVE HAPPENED', RX + 22, PY + 36);

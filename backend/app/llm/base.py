@@ -47,18 +47,20 @@ class OpenAICompatClient:
         self._headers = {"Content-Type": "application/json", **(extra_headers or {})}
         self._headers[key_header] = f"Bearer {api_key}" if key_header == "Authorization" else api_key
 
-    async def complete_json(self, system: str, user: str, *, temperature: float = 0.3) -> dict:
+    async def complete_json(self, system: str, user: str, *, temperature: float = 0.3, attempts: int = 3,
+                            max_wait: float = 20.0) -> dict:
         body = {"model": self.model, "temperature": temperature,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
         last: Exception | None = None
-        for attempt in range(3):
+        for attempt in range(attempts):
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
                     resp = await client.post(self._url, headers=self._headers, json=body)
                 if resp.status_code in (429, 500, 502, 503, 504):
-                    wait = min(20.0, float(resp.headers.get("retry-after", 2 ** attempt * 2)))
+                    wait = min(max_wait, float(resp.headers.get("retry-after", 2 ** attempt * 2)))
                     last = LLMError(f"HTTP {resp.status_code}")
-                    await asyncio.sleep(wait)
+                    if attempt + 1 < attempts:
+                        await asyncio.sleep(wait)
                     continue
                 if resp.status_code >= 400:
                     raise LLMError(f"HTTP {resp.status_code}: {resp.text[:200]}")
@@ -66,7 +68,8 @@ class OpenAICompatClient:
                 return parse_json_object(content)
             except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
                 last = LLMError(f"{type(exc).__name__}: {exc}")
-                await asyncio.sleep(2 ** attempt)
+                if attempt + 1 < attempts:
+                    await asyncio.sleep(min(max_wait, 2 ** attempt))
         raise LLMError(str(last))
 
 

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CH, CW, LOCALE, buildFilmPlan, drawFrame } from './film';
+import { TEAMS } from '../engine/data';
+import { CH, CW, DEFAULT_FILM, LOCALE, PRESETS, buildFilmPlan, drawFrame } from './film';
 
 export default function MatchFilm({ match, lang, mode }) {
-  const plan = useMemo(() => buildFilmPlan(match.events, lang, mode), [match.events, lang, mode]);
+  const [opts, setOpts] = useState(DEFAULT_FILM);
+  const plan = useMemo(() => buildFilmPlan(match.events, lang, mode, opts), [match.events, lang, mode, opts]);
   const canvasRef = useRef(null);
   const tRef = useRef(0);
   const playRef = useRef(false);
@@ -25,6 +27,9 @@ export default function MatchFilm({ match, lang, mode }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
+    tRef.current = 0;
+    playRef.current = false;
+    lastSeg.current = -1;
     let raf;
     let last = performance.now();
     const loop = (now) => {
@@ -90,14 +95,38 @@ export default function MatchFilm({ match, lang, mode }) {
 
   const scrub = (e) => { tRef.current = Number(e.target.value) * plan.total; setProgress(Number(e.target.value)); };
   const secs = Math.round(plan.total);
+  const set = (patch) => { if (!recording) { setPlaying(false); setProgress(0); setOpts((o) => ({ ...o, ...patch })); } };
+  const count = (k) => plan.segs.filter((x) => x.kind === k).length;
 
   return (
     <div className="lab-pane film">
       <div className="lab-toolbar">
-        <span className="film-info">{plan.segs.filter((s) => s.kind === 'clip').length} key moments · {plan.segs.filter((s) => s.kind === 'second').length} second guesses · {secs}s</span>
+        <span className="film-info">{count('clip')} key moments · {count('second')} second guesses · {count('stats') + count('xgrace') + count('shotmap') + count('motm')} analytics cards · {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}{secs > 120 ? ' (over the 2 min hackathon limit)' : ''}</span>
         <label className="lab-toggle">
           <input type="checkbox" checked={voice} onChange={(e) => setVoice(e.target.checked)} disabled={!window.speechSynthesis} />
           Voice-over in preview (not captured in the recording)
+        </label>
+      </div>
+      <div className="film-opts">
+        <div className="seg" role="group" aria-label="Film length">
+          {Object.entries(PRESETS).map(([k, v]) => (
+            <button key={k} className={opts.preset === k ? 'on' : ''} onClick={() => set({ preset: k })} title={v.hint}>{v.label}</button>
+          ))}
+        </div>
+        <label className="lab-toggle"><input type="checkbox" checked={opts.secondGuess} onChange={(e) => set({ secondGuess: e.target.checked })} /> Second-guess cards</label>
+        <label className="lab-toggle"><input type="checkbox" checked={opts.cards} onChange={(e) => set({ cards: e.target.checked })} /> Analytics cards (stats, xG race, shot map, top performers)</label>
+        <label className="lab-select">
+          Focus
+          <select value={opts.focus} onChange={(e) => set({ focus: e.target.value })}>
+            <option value="all">Whole match</option>
+            <option value="home">{TEAMS.home.name}</option>
+            <option value="away">{TEAMS.away.name}</option>
+            {['home', 'away'].map((t) => (
+              <optgroup key={t} label={TEAMS[t].name}>
+                {TEAMS[t].players.filter((pl) => pl.pos !== 'GK').map((pl) => <option key={`${t}${pl.n}`} value={`${t}:${pl.n}`}>{pl.name}</option>)}
+              </optgroup>
+            ))}
+          </select>
         </label>
       </div>
       <div className="film-frame">
@@ -113,7 +142,7 @@ export default function MatchFilm({ match, lang, mode }) {
         )}
         {video && <a className="btn-primary" href={video.url} download="second-guess-analytics-film.webm">Download video ({(video.size / 1e6).toFixed(1)} MB)</a>}
       </div>
-      <p className="lab-note">The film is rendered live in your browser from the match events and the what-if model, in the language and audience mode chosen above. No video service, no upload. Upload the WebM to YouTube for the hackathon demo.</p>
+      <p className="lab-note">The film is rendered live in your browser from the match events and the what-if model, in the language and audience mode chosen in the studio. Choose Standard for a demo-safe length. No video service, no upload: record the WebM and upload it to YouTube.</p>
     </div>
   );
 }

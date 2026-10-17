@@ -127,3 +127,5 @@
   .sg-list { max-height: 260px; }
   .an-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.film-opts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 22px; }
