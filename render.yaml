@@ -1,0 +1,25 @@
+# Render Blueprint: creates the API service. Create the Neon database separately and paste its URL.
+services:
+  - type: web
+    name: match-insights-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: STORE_PROVIDER
+        value: auto
+      - key: DATABASE_URL        # Neon connection string, e.g. postgresql://user:pass@host/db?sslmode=require
+        sync: false
+      - key: LLM_PROVIDER        # template | github | azure
+        value: github
+      - key: LLM_MODEL
+        value: openai/gpt-4o-mini
+      - key: GITHUB_TOKEN        # needs access to GitHub Models; leave empty to use templates
+        sync: false
+      - key: CORS_ORIGINS        # your Vercel production URL, e.g. https://match-insights.vercel.app
+        sync: false

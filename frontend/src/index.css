@@ -1,0 +1,44 @@
+:root {
+  --bg: #05070d;
+  --bg-2: #0a0e19;
+  --panel: rgba(255, 255, 255, 0.035);
+  --panel-2: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #e9edf7;
+  --muted: #8b94ab;
+  --home: #38f8c7;
+  --away: #ff5d8f;
+  --violet: #8b5cf6;
+  --amber: #fbbf24;
+  --radius: 20px;
+  --font-display: 'Bricolage Grotesque', 'Noto Sans Devanagari', 'Noto Sans Arabic', system-ui, sans-serif;
+  --font-body: 'DM Sans', 'Noto Sans Devanagari', 'Noto Sans Arabic', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; }
+html { background: var(--bg); }
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; line-height: 1.04; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+::selection { background: var(--home); color: #04110d; }
+:focus-visible { outline: 2px solid var(--home); outline-offset: 3px; border-radius: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
