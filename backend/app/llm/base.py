@@ -66,6 +66,7 @@ class OpenAICompatClient:
         except httpx.HTTPError as exc:
             return {"error": f"{type(exc).__name__}: {exc}"[:200]}
         out = {"status": resp.status_code, "contentType": resp.headers.get("content-type", "")[:60],
+               "server": resp.headers.get("server", "")[:40], "requestId": resp.headers.get("x-github-request-id", "")[:40],
                "preview": resp.text[:160], "ms": round((time.perf_counter() - t0) * 1000), "json": False}
         try:
             payload = resp.json()
@@ -125,8 +126,10 @@ def build_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
         if not key:
             return None, LLMInfo(provider, "template", settings.llm_model, "GITHUB_TOKEN not set; using templates")
         base = (settings.llm_base_url or "https://models.github.ai/inference").rstrip("/")
+        # Headers as documented for the GitHub Models REST API.
+        gh_headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
         client = OpenAICompatClient(name="github-models", url=f"{base}/chat/completions", api_key=key,
-                                    model=settings.llm_model, timeout=settings.llm_timeout_s)
+                                    model=settings.llm_model, timeout=settings.llm_timeout_s, extra_headers=gh_headers)
         return client, LLMInfo(provider, "github-models", settings.llm_model)
     if provider == "openai_compat":
         if not (key and settings.llm_base_url):

@@ -13,9 +13,15 @@ def diagnose(provider: str, probe: dict) -> dict:
     gh = ("With LLM_PROVIDER=github, leave LLM_BASE_URL empty: the default https://models.github.ai/inference is used. "
           if provider == "github" else "")
     if st == 200 and not probe["json"]:
-        return {"ok": False, "problem": f"the URL answered 200 but with plain text ({probe['preview'][:40]!r}), not a chat completion",
-                "hint": gh + "LLM_BASE_URL is probably pointing at a web page or health endpoint instead of the model API. "
-                            "It should be the API root that serves /chat/completions."}
+        who = f" (server: {probe.get('server') or 'unknown'}{', request ' + probe['requestId'] if probe.get('requestId') else ''})"
+        if provider == "github":
+            return {"ok": False, "problem": f"GitHub answered 200 with plain text ({probe['preview'][:40]!r}) instead of a chat completion{who}",
+                    "hint": "The endpoint is right, so this is about the credentials or request. Check that GITHUB_TOKEN is a fine-grained token "
+                            "with the account permission 'Models: Read' (not just repository access), copy it again without spaces or quotes, "
+                            "and redeploy. If it still happens, test a classic token (no scopes needed) to rule out the token type."}
+        return {"ok": False, "problem": f"the URL answered 200 but with plain text ({probe['preview'][:40]!r}), not a chat completion{who}",
+                "hint": "LLM_BASE_URL is probably pointing at a web page or health endpoint instead of the model API. "
+                        "It should be the API root that serves /chat/completions."}
     if st == 200:
         return {"ok": False, "problem": "the provider answered 200 with JSON that has no 'choices'",
                 "hint": "That is not an OpenAI-compatible chat-completions response. Check LLM_BASE_URL and LLM_MODEL."}

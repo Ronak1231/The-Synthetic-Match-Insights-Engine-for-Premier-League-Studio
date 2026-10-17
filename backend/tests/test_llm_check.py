@@ -18,7 +18,9 @@ S = Settings(store_provider="memory", llm_provider="template", warm_on_start=Fal
 
 def test_plain_text_200_is_diagnosed_as_a_wrong_base_url():
     v = diagnose("github", {"status": 200, "json": False, "preview": "OK", "contentType": "text/plain"})
-    assert not v["ok"] and "plain text" in v["problem"] and "LLM_BASE_URL" in v["hint"]
+    assert not v["ok"] and "plain text" in v["problem"] and "Models: Read" in v["hint"]
+    other = diagnose("openai_compat", {"status": 200, "json": False, "preview": "OK", "contentType": "text/plain"})
+    assert "LLM_BASE_URL" in other["hint"]
 
 
 @pytest.mark.parametrize("probe,word", [
@@ -87,3 +89,11 @@ def test_misconfigured_provider_cools_down_for_minutes_with_a_friendly_message()
 def test_client_endpoint_hides_credentials():
     c = OpenAICompatClient(name="x", url="https://user:pw@host.test/inference/chat/completions?key=secret", api_key="tok", model="m")
     assert "tok" not in c.endpoint and "secret" not in c.endpoint and "pw" not in c.endpoint
+
+
+def test_github_provider_sends_the_documented_headers():
+    s = Settings(store_provider="memory", llm_provider="github", github_token="t", warm_on_start=False)
+    client, _ = build_llm(s)
+    assert client._headers["Accept"] == "application/vnd.github+json"
+    assert client._headers["X-GitHub-Api-Version"] == "2022-11-28"
+    assert client._headers["Authorization"] == "Bearer t"
