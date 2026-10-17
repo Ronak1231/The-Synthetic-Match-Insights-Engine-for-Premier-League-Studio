@@ -97,7 +97,7 @@ def create_app(settings: Settings | None = None, service: MatchService | None = 
         return {"status": "ok", "store": await svc(request).store.ping()}
 
     @app.get("/api/llm/check")
-    async def llm_check(request: Request):
+    async def llm_check(request: Request, matrix: bool = False):
         """Makes one tiny request to the configured model and says what is wrong in plain language."""
         if not chat_gate.allow("llmcheck:" + client_key(request)):
             raise HTTPException(429, "too many checks; wait a moment")
@@ -108,8 +108,12 @@ def create_app(settings: Settings | None = None, service: MatchService | None = 
                     "hint": sv.llm_info.note or "Set LLM_PROVIDER and a token (see README). The app still works without one."}
         probe = await sv.llm.probe()
         verdict = diagnose(sv.llm_info.provider, probe)
-        return {**info, "configured": True, "endpoint": sv.llm.endpoint, "httpStatus": probe.get("status"),
-                "latencyMs": probe.get("ms"), **verdict}
+        result = {**info, "configured": True, "endpoint": sv.llm.endpoint, "httpStatus": probe.get("status"),
+                  "latencyMs": probe.get("ms"), **verdict}
+        if matrix:
+            # Same tiny request in several shapes, so one call shows which shape the provider accepts.
+            result["matrix"] = await sv.llm.probe_matrix(github=sv.llm_info.provider == "github")
+        return result
 
     @app.get("/api/config")
     async def config(request: Request):

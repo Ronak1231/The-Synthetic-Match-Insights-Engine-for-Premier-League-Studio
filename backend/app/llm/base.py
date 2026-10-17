@@ -76,6 +76,51 @@ class OpenAICompatClient:
             pass
         return out
 
+    async def probe_matrix(self, *, github: bool = False, control_url: str = "https://api.github.com/rate_limit") -> list[dict]:
+        """Try several request shapes and report what each one gets back (for /api/llm/check?matrix=1).
+
+        Never returns keys or headers sent; only status, content type, server, request id and a short preview.
+        """
+        u = urlparse(self._url)
+        origin = f"{u.scheme}://{u.netloc}"
+        auth = self._headers.get("Authorization") or ""
+        body = {"model": self.model, "max_tokens": 8, "messages": [{"role": "user", "content": "Reply with the word ok."}]}
+        base = {"Content-Type": "application/json", "Authorization": auth}
+        variants: list[tuple[str, str, str, dict, dict | None]] = [
+            ("configured request", "POST", self._url, dict(self._headers), body),
+            ("plain JSON headers only", "POST", self._url, {**base, "Accept": "application/json"}, body),
+        ]
+        if github:
+            gh = {**base, "Accept": "application/vnd.github+json"}
+            variants += [
+                ("GitHub headers, api version 2022-11-28", "POST", self._url, {**gh, "X-GitHub-Api-Version": "2022-11-28"}, body),
+                ("GitHub headers, api version 2026-03-10", "POST", self._url, {**gh, "X-GitHub-Api-Version": "2026-03-10"}, body),
+                ("model catalog (token accepted?)", "GET", f"{origin}/catalog/models", {"Authorization": auth, "Accept": "application/vnd.github+json"}, None),
+                ("control: api.github.com reachable and token valid?", "GET", control_url, {"Authorization": auth, "Accept": "application/vnd.github+json"}, None),
+            ]
+        rows: list[dict] = []
+        async with httpx.AsyncClient(timeout=min(self._timeout, 15.0), follow_redirects=False) as client:
+            for name, method, url, headers, payload in variants:
+                t0 = time.perf_counter()
+                row: dict = {"variant": name}
+                try:
+                    resp = await client.request(method, url, headers=headers, json=payload)
+                except httpx.HTTPError as exc:
+                    row["error"] = f"{type(exc).__name__}: {exc}"[:160]
+                    rows.append(row)
+                    continue
+                row.update({"status": resp.status_code, "contentType": resp.headers.get("content-type", "")[:50],
+                            "server": resp.headers.get("server", "")[:40], "requestId": resp.headers.get("x-github-request-id", "")[:40],
+                            "preview": resp.text[:80], "ms": round((time.perf_counter() - t0) * 1000)})
+                try:
+                    data = resp.json()
+                    row["json"] = True
+                    row["hasChoices"] = isinstance(data, dict) and bool(data.get("choices"))
+                except ValueError:
+                    row["json"] = False
+                rows.append(row)
+        return rows
+
     async def complete_json(self, system: str, user: str, *, temperature: float = 0.3, attempts: int = 3,
                             max_wait: float = 20.0) -> dict:
         body = {"model": self.model, "temperature": temperature,
