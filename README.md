@@ -75,7 +75,9 @@ Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
 
 ## Deploy: Neon + Render + Vercel
 1. **Neon:** create a project, copy the connection string (`postgresql://...?sslmode=require`).
-2. **GitHub Models (optional LLM):** create a token with access to GitHub Models. Without it the backend uses templates.
+2. **LLM (optional):** for Gemini, set `LLM_PROVIDER=gemini`, `LLM_API_KEY` to a Google AI Studio key,
+   and leave `LLM_BASE_URL` empty. The default model is `gemini-2.5-flash`. GitHub Models remains available
+   with `LLM_PROVIDER=github`. Without an LLM key the backend uses templates.
 3. **Render:** New > Blueprint, point at this repo (`render.yaml`). Set `DATABASE_URL`, `GITHUB_TOKEN` and
    `CORS_ORIGINS` (your Vercel URL). The free service sleeps when idle; the UI keeps playing on its simulator while it wakes.
 4. **Vercel:** import the repo, set **Root Directory** to `frontend`, add `VITE_API_URL` = your Render URL.
@@ -83,7 +85,7 @@ Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
 
 ## Configuration
 All switches are environment variables, listed in `backend/.env.example`: `LLM_PROVIDER` (`template`, `github`,
-`openai_compat`, `azure`), `STORE_PROVIDER` (`auto`, `memory`, `sql`, `cosmos`), `DATABASE_URL`, CORS settings, and
+`openai_compat`, `gemini`, `azure`), `STORE_PROVIDER` (`auto`, `memory`, `sql`, `cosmos`), `DATABASE_URL`, CORS settings, and
 LLM spend guards (`LLM_SEED_ALLOWLIST`, `LLM_MAX_CALLS_PER_MATCH`). Moving to Azure is a change of these values.
 
 ## Frontend
@@ -95,7 +97,7 @@ real browser by its author yet.
 ## Free stack (no Azure account needed)
 | Need | Free option used |
 |---|---|
-| LLM (optional) | GitHub Models via a GitHub token with `models: read` (`LLM_PROVIDER=github`); rate-limited free tier. Or local Ollama via `LLM_PROVIDER=openai_compat`, `LLM_BASE_URL=http://localhost:11434/v1`, any `LLM_API_KEY`. |
+| LLM (optional) | Gemini via Google AI Studio (`LLM_PROVIDER=gemini`, `LLM_API_KEY`); GitHub Models via a GitHub token with `models: read` (`LLM_PROVIDER=github`); or local Ollama via `LLM_PROVIDER=openai_compat`. |
 | Hosting | Vercel (frontend), Render free web service (API), Neon free Postgres. Ping `/api/health` every 10 minutes with a free monitor to stop the API sleeping during judging. |
 | Voice, video | Browser Web Speech API, canvas + MediaRecorder |
 | Dev tooling | GitHub, GitHub Copilot, GitHub Actions (CI in `.github/workflows/ci.yml`) |
@@ -108,6 +110,7 @@ explains the result in plain language, without printing any secret.
 - *"answered 200 but with plain text"*: `LLM_BASE_URL` points at a web page, not the model API. With `LLM_PROVIDER=github`
   leave `LLM_BASE_URL` empty (the default is `https://models.github.ai/inference`).
 - *"rejected the token"*: create a GitHub token with `models: read`, set `GITHUB_TOKEN`, redeploy.
-- *"404"*: wrong base URL or model id (GitHub Models ids look like `openai/gpt-4o-mini`).
+- *"404"*: wrong base URL or model id. For Gemini, use `LLM_PROVIDER=gemini`, leave `LLM_BASE_URL` empty,
+  and use a model available to your API key such as `gemini-2.5-flash`.
 - *"rate limited"*: free-tier limit; the match warm-up at startup uses the same quota (`WARM_ON_START=false` saves it).
 Chat keeps working while the model is broken: the built-in analyst answers, and a misconfigured model is not retried for 5 minutes.

@@ -5,7 +5,7 @@ import asyncio
 import json
 import re
 import time
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from dataclasses import dataclass
 
 import httpx
@@ -161,6 +161,78 @@ class OpenAICompatClient:
         raise LLMError(str(last))
 
 
+class GeminiClient(OpenAICompatClient):
+    """Client for Google's native Gemini generateContent API."""
+
+    def __init__(self, *, api_key: str, model: str, base_url: str, timeout: float = 25.0) -> None:
+        self.name = "gemini"
+        self.model = model
+        self._url = f"{base_url.rstrip('/')}/models/{quote(model, safe='')}:generateContent?key={quote(api_key, safe='')}"
+        self._timeout = timeout
+        self._headers = {"Accept": "application/json", "Content-Type": "application/json"}
+
+    async def probe(self) -> dict:
+        body = {"contents": [{"role": "user", "parts": [{"text": "Reply with the word ok."}]}],
+                "generationConfig": {"maxOutputTokens": 8}}
+        t0 = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=min(self._timeout, 15.0), follow_redirects=False) as client:
+                resp = await client.post(self._url, headers=self._headers, json=body)
+        except httpx.HTTPError as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"[:200]}
+        out = {"status": resp.status_code, "contentType": resp.headers.get("content-type", "")[:60],
+               "server": resp.headers.get("server", "")[:40], "preview": resp.text[:160],
+               "ms": round((time.perf_counter() - t0) * 1000), "json": False}
+        try:
+            payload = resp.json()
+            out["json"] = True
+            out["hasContent"] = bool(payload.get("candidates")) if isinstance(payload, dict) else False
+        except ValueError:
+            pass
+        return out
+
+    async def probe_matrix(self, **_: object) -> list[dict]:
+        """Native Gemini has no OpenAI-compatible request matrix."""
+        return []
+
+    async def complete_json(self, system: str, user: str, *, temperature: float = 0.3, attempts: int = 3,
+                            max_wait: float = 20.0) -> dict:
+        body = {
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "responseMimeType": "application/json",
+            },
+        }
+        last: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.post(self._url, headers=self._headers, json=body)
+                if resp.status_code in (429, 500, 502, 503, 504):
+                    wait = min(max_wait, float(resp.headers.get("retry-after", 2 ** attempt * 2)))
+                    last = LLMError(f"HTTP {resp.status_code}")
+                    if attempt + 1 < attempts:
+                        await asyncio.sleep(wait)
+                    continue
+                if resp.status_code >= 400:
+                    raise LLMError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+                try:
+                    payload = resp.json()
+                    content = payload["candidates"][0]["content"]["parts"][0]["text"]
+                except (ValueError, KeyError, IndexError, TypeError) as exc:
+                    raise LLMError(f"invalid Gemini response: {resp.text[:200]}") from exc
+                if not isinstance(content, str) or not content.strip():
+                    raise LLMError("empty model content in Gemini response")
+                return parse_json_object(content)
+            except (httpx.HTTPError, LLMError) as exc:
+                last = LLMError(f"{type(exc).__name__}: {exc}")
+                if attempt + 1 < attempts:
+                    await asyncio.sleep(min(max_wait, 2 ** attempt))
+        raise LLMError(str(last))
+
+
 def build_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
     """Pick the LLM from configuration. Returns (client or None, status for /api/config)."""
     provider = settings.llm_provider
@@ -183,6 +255,12 @@ def build_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
         client = OpenAICompatClient(name="openai-compatible", url=f"{base}/chat/completions", api_key=key,
                                     model=settings.llm_model, timeout=settings.llm_timeout_s)
         return client, LLMInfo(provider, "openai-compatible", settings.llm_model)
+    if provider == "gemini":
+        if not key:
+            return None, LLMInfo(provider, "template", settings.llm_model, "LLM_API_KEY not set; using templates")
+        base = (settings.llm_base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+        client = GeminiClient(api_key=key, model=settings.llm_model, base_url=base, timeout=settings.llm_timeout_s)
+        return client, LLMInfo(provider, "gemini", settings.llm_model)
     if provider == "azure":
         endpoint, deployment = settings.azure_openai_endpoint.rstrip("/"), settings.azure_openai_deployment
         if not (key and endpoint and deployment):

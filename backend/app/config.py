@@ -24,9 +24,10 @@ class Settings(BaseSettings):
     # template     : no LLM, deterministic templates only (always works, costs nothing)
     # github       : GitHub Models (free with a GitHub token)
     # openai_compat: any OpenAI-compatible /chat/completions endpoint
+    # gemini      : Google Gemini Generative Language API
     # azure        : Azure OpenAI / Microsoft Foundry deployment
-    llm_provider: Literal["template", "github", "openai_compat", "azure"] = "template"
-    llm_model: str = "openai/gpt-4o-mini"
+    llm_provider: Literal["template", "github", "openai_compat", "gemini", "azure"] = "template"
+    llm_model: str = "gemini-2.5-flash"
     llm_base_url: str = ""
     llm_api_key: str = ""
     github_token: str = ""

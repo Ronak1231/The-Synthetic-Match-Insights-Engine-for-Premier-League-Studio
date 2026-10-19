@@ -136,6 +136,9 @@ def test_llm_provider_selection_from_config():
     c, info = build_llm(Settings(llm_provider="azure", azure_openai_endpoint="https://x.openai.azure.com",
                                  azure_openai_api_key="k", azure_openai_deployment="gpt-4o-mini"))
     assert c and c._url.endswith("/openai/v1/chat/completions") and c._headers["api-key"] == "k"
+    c, info = build_llm(Settings(llm_provider="gemini", llm_api_key="k"))
+    assert c and info.active == "gemini" and c.endpoint.endswith("/v1beta/models/gemini-2.5-flash:generateContent")
+    assert "key=k" not in c.endpoint
 
 
 def test_parse_json_object_tolerates_fences():

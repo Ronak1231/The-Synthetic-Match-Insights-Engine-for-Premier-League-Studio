@@ -8,7 +8,7 @@ def diagnose(provider: str, probe: dict) -> dict:
         return {"ok": False, "problem": "the provider could not be reached",
                 "hint": "Check LLM_BASE_URL (it must be an https URL) and that the host is reachable from Render. " + probe["error"]}
     st = probe["status"]
-    if st == 200 and probe.get("hasChoices"):
+    if st == 200 and (probe.get("hasChoices") or probe.get("hasContent")):
         return {"ok": True, "problem": "", "hint": ""}
     gh = ("With LLM_PROVIDER=github, leave LLM_BASE_URL empty: the default https://models.github.ai/inference is used. "
           if provider == "github" else "")
@@ -31,7 +31,9 @@ def diagnose(provider: str, probe: dict) -> dict:
                          if provider == "github" else "Check LLM_API_KEY.") + "Redeploy after changing it."}
     if st == 404:
         return {"ok": False, "problem": "the provider answered 404 (not found)",
-                "hint": gh + "The base URL or the model name is wrong. For GitHub Models the model id looks like openai/gpt-4o-mini."}
+                "hint": gh + ("Use the native Gemini provider with LLM_BASE_URL empty and a model such as gemini-2.5-flash. "
+                              if provider == "gemini" else "") +
+                        "The base URL or the model name is wrong. For GitHub Models the model id looks like openai/gpt-4o-mini."}
     if st == 400:
         return {"ok": False, "problem": "the provider rejected the request (HTTP 400)",
                 "hint": "The model name is usually the cause. " + probe["preview"][:100]}
