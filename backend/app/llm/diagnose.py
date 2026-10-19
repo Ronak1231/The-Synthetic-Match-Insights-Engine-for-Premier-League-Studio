@@ -31,7 +31,7 @@ def diagnose(provider: str, probe: dict) -> dict:
                          if provider == "github" else "Check LLM_API_KEY.") + "Redeploy after changing it."}
     if st == 404:
         return {"ok": False, "problem": "the provider answered 404 (not found)",
-                "hint": gh + ("Use the native Gemini provider with LLM_BASE_URL empty and a model such as gemini-2.5-flash. "
+                "hint": gh + ("Use the native Gemini provider with LLM_BASE_URL empty and a model such as gemini-3.8-flash. "
                               if provider == "gemini" else "") +
                         "The base URL or the model name is wrong. For GitHub Models the model id looks like openai/gpt-4o-mini."}
     if st == 400:

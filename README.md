@@ -76,7 +76,7 @@ Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
 ## Deploy: Neon + Render + Vercel
 1. **Neon:** create a project, copy the connection string (`postgresql://...?sslmode=require`).
 2. **LLM (optional):** for Gemini, set `LLM_PROVIDER=gemini`, `LLM_API_KEY` to a Google AI Studio key,
-   and leave `LLM_BASE_URL` empty. The default model is `gemini-2.5-flash`. GitHub Models remains available
+   and leave `LLM_BASE_URL` empty. The default model is `gemini-3.8-flash`. GitHub Models remains available
    with `LLM_PROVIDER=github`. Without an LLM key the backend uses templates.
 3. **Render:** New > Blueprint, point at this repo (`render.yaml`). Set `DATABASE_URL`, `GITHUB_TOKEN` and
    `CORS_ORIGINS` (your Vercel URL). The free service sleeps when idle; the UI keeps playing on its simulator while it wakes.
@@ -111,6 +111,6 @@ explains the result in plain language, without printing any secret.
   leave `LLM_BASE_URL` empty (the default is `https://models.github.ai/inference`).
 - *"rejected the token"*: create a GitHub token with `models: read`, set `GITHUB_TOKEN`, redeploy.
 - *"404"*: wrong base URL or model id. For Gemini, use `LLM_PROVIDER=gemini`, leave `LLM_BASE_URL` empty,
-  and use a model available to your API key such as `gemini-2.5-flash`.
+  and use a model available to your API key such as `gemini-3.8-flash`.
 - *"rate limited"*: free-tier limit; the match warm-up at startup uses the same quota (`WARM_ON_START=false` saves it).
 Chat keeps working while the model is broken: the built-in analyst answers, and a misconfigured model is not retried for 5 minutes.

@@ -18,7 +18,7 @@ services:
       - key: LLM_PROVIDER        # template | github | openai_compat | gemini | azure
         value: gemini
       - key: LLM_MODEL
-        value: gemini-2.5-flash
+        value: gemini-3.8-flash
       - key: LLM_API_KEY        # Google AI Studio API key; leave empty to use templates
         sync: false
       - key: CORS_ORIGINS        # your Vercel production URL, e.g. https://match-insights.vercel.app

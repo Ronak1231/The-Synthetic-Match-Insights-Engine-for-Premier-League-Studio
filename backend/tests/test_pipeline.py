@@ -137,7 +137,7 @@ def test_llm_provider_selection_from_config():
                                  azure_openai_api_key="k", azure_openai_deployment="gpt-4o-mini"))
     assert c and c._url.endswith("/openai/v1/chat/completions") and c._headers["api-key"] == "k"
     c, info = build_llm(Settings(llm_provider="gemini", llm_api_key="k"))
-    assert c and info.active == "gemini" and c.endpoint.endswith("/v1beta/models/gemini-2.5-flash:generateContent")
+    assert c and info.active == "gemini" and c.endpoint.endswith("/v1beta/models/gemini-3.8-flash:generateContent")
     assert "key=k" not in c.endpoint
 
 
