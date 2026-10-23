@@ -1,0 +1,136 @@
+{
+  "info": {
+    "_postman_id": "28b68724-4da0-4c9d-8b50-5c96e882392c",
+    "name": "Match Insights API",
+    "description": "Smoke tests for the deployed Match Insights backend. Set baseUrl to the Render service URL. Provider API keys stay on the server; do not put them in Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://the-synthetic-match-insights-engine-for.onrender.com"
+    },
+    {
+      "key": "seed",
+      "value": "40"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Health returns HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Service reports healthy status', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Configuration",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/config"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Configuration returns HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Pipeline and chat configuration are present', function () { var body = pm.response.json(); pm.expect(body.llm).to.be.an('object'); pm.expect(body.chat).to.be.an('object'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI connection check (pipeline)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/llm/check"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Connection check endpoint returns HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Connection check includes a diagnosis', function () { var body = pm.response.json(); pm.expect(body).to.have.property('ok'); pm.expect(body).to.have.property('problem'); pm.expect(body).to.have.property('hint'); });",
+              "console.log('AI connection diagnosis:', pm.response.json());"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Match data",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/match/{{seed}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Match endpoint returns HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Match data contains events and insights', function () { var body = pm.response.json(); pm.expect(body.events).to.be.an('array'); pm.expect(body.insights).to.be.an('array'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ask about the match (chat)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Summarise the match\",\n  \"lang\": \"en\",\n  \"mode\": \"casual\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/match/{{seed}}/chat"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Chat endpoint returns HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Chat returns an answer and model status', function () { var body = pm.response.json(); pm.expect(body.answer).to.be.a('string').and.not.empty; pm.expect(body.llm).to.be.an('object'); pm.expect(body.llm).to.have.property('state'); });",
+              "console.log('Chat source and model status:', { source: pm.response.json().source, llm: pm.response.json().llm });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

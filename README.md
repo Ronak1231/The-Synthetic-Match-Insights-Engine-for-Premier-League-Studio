@@ -123,3 +123,15 @@ explains the result in plain language, without printing any secret.
   `CHAT_LLM_BASE_URL` empty, and use a model available to your API key such as `gemini-3.1-flash-lite`.
 - *"rate limited"*: free-tier limit; the match warm-up at startup uses the same quota (`WARM_ON_START=false` saves it).
 Chat keeps working while the model is broken: the built-in analyst answers, and a misconfigured model is not retried for 5 minutes.
+
+## Test the deployed API with Postman
+Import [`postman/Match Insights API.postman_collection.json`](./postman/Match%20Insights%20API.postman_collection.json)
+into Postman. The collection includes health, configuration, model check, match data, and chat requests. Set the
+collection variable `baseUrl` to your Render service URL (no trailing slash), then send **Health**, **AI connection
+check**, and **Ask about the match** in that order. No provider API key should be entered in Postman; it stays in
+Render's environment variables.
+
+The AI connection check tests the match-pipeline model. Check the `chat` object from **Configuration**, then send
+**Ask about the match** to test the chatbot itself. A chat response with `"source": "template"` or an `llm.state`
+other than `"ok"` means the built-in analyst answered instead of Gemini. A successful HTTP status alone does not
+prove the upstream model call succeeded.
