@@ -141,6 +141,15 @@ def test_llm_provider_selection_from_config():
     assert "key=k" not in c.endpoint
 
 
+def test_invalid_provider_validation_does_not_print_input_value():
+    from pydantic import ValidationError
+
+    exposed_value = "github-token-that-must-not-appear"
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(llm_provider=exposed_value)
+    assert exposed_value not in str(exc_info.value)
+
+
 def test_pipeline_and_chat_can_use_separate_providers():
     settings = Settings(
         llm_provider="github",
