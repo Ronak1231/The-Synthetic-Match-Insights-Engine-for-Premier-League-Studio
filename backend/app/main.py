@@ -19,7 +19,7 @@ from .agents.chat import RateLimiter
 from .llm.diagnose import diagnose
 from .domain.narration import LANGS, overlay_cue, template_text
 from .domain.whatif import explain_whatif, list_moments, simulate_whatif
-from .llm.base import build_llm
+from .llm.base import build_chat_llm, build_llm
 from .service import MatchService
 from .store import build_store
 
@@ -55,8 +55,9 @@ def create_app(settings: Settings | None = None, service: MatchService | None = 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if service is None:
-            llm, info = build_llm(settings)
-            app.state.svc = MatchService(settings, build_store(settings), llm, info)
+            llm, info = build_llm(settings)              # narrator / pipeline (GitHub Models)
+            chat_llm, chat_info = build_chat_llm(settings)  # "Ask the match" (Gemini), or the same as above
+            app.state.svc = MatchService(settings, build_store(settings), llm, info, chat_llm, chat_info)
         else:
             app.state.svc = service
         warm = None
@@ -97,22 +98,29 @@ def create_app(settings: Settings | None = None, service: MatchService | None = 
         return {"status": "ok", "store": await svc(request).store.ping()}
 
     @app.get("/api/llm/check")
-    async def llm_check(request: Request, matrix: bool = False):
-        """Makes one tiny request to the configured model and says what is wrong in plain language."""
+    async def llm_check(request: Request, matrix: bool = False, target: str = "chat"):
+        """Makes one tiny request to a configured model and says what is wrong in plain language.
+
+        ``target=chat`` (default, what the "Check AI connection" button tests) checks the chat model;
+        ``target=pipeline`` checks the model used by the narrator.
+        """
         if not chat_gate.allow("llmcheck:" + client_key(request)):
             raise HTTPException(429, "too many checks; wait a moment")
+        if target not in ("chat", "pipeline"):
+            raise HTTPException(422, "target must be 'chat' or 'pipeline'")
         sv = svc(request)
-        info = {"provider": sv.llm_info.provider, "model": sv.llm_info.model}
-        if sv.llm is None:
+        client, linfo = (sv.chat_llm, sv.chat_llm_info) if target == "chat" else (sv.llm, sv.llm_info)
+        info = {"target": target, "provider": linfo.provider, "model": linfo.model}
+        if client is None:
             return {**info, "ok": False, "configured": False, "problem": "no language model is configured",
-                    "hint": sv.llm_info.note or "Set LLM_PROVIDER and a token (see README). The app still works without one."}
-        probe = await sv.llm.probe()
-        verdict = diagnose(sv.llm_info.provider, probe)
-        result = {**info, "configured": True, "endpoint": sv.llm.endpoint, "httpStatus": probe.get("status"),
+                    "hint": linfo.note or "Set the provider and key (see README). The app still works without one."}
+        probe = await client.probe()
+        verdict = diagnose(linfo.provider, probe)
+        result = {**info, "configured": True, "endpoint": client.endpoint, "httpStatus": probe.get("status"),
                   "latencyMs": probe.get("ms"), **verdict}
         if matrix:
             # Same tiny request in several shapes, so one call shows which shape the provider accepts.
-            result["matrix"] = await sv.llm.probe_matrix(github=sv.llm_info.provider == "github")
+            result["matrix"] = await client.probe_matrix(github=linfo.provider == "github")
         return result
 
     @app.get("/api/config")

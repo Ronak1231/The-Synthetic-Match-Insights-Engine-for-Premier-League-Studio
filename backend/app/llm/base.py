@@ -233,10 +233,33 @@ class GeminiClient(OpenAICompatClient):
         raise LLMError(str(last))
 
 
+DEFAULT_MODELS = {"github": "openai/gpt-4o-mini", "gemini": "gemini-3.1-flash-lite",
+                  "openai_compat": "gpt-4o-mini", "azure": ""}
+
+
+def _model_for(provider: str, model: str) -> tuple[str, str]:
+    """Return (model, note). Fills in a default and repairs a model id that belongs to another provider."""
+    model = (model or "").strip()
+    if not model:
+        return DEFAULT_MODELS.get(provider, "-"), ""
+    if provider == "github" and "/" not in model:
+        return DEFAULT_MODELS["github"], f"model {model!r} is not a GitHub Models id (publisher/name); using {DEFAULT_MODELS['github']}"
+    if provider == "gemini" and "/" in model:
+        return DEFAULT_MODELS["gemini"], f"model {model!r} is not a Gemini id; using {DEFAULT_MODELS['gemini']}"
+    return model, ""
+
+
+def build_chat_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
+    """LLM used only by the "Ask the match" chat. Falls back to the main LLM when CHAT_LLM_PROVIDER is empty."""
+    return build_llm(settings.for_chat())
+
+
 def build_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
     """Pick the LLM from configuration. Returns (client or None, status for /api/config)."""
     provider = settings.llm_provider
     key = settings.resolved_llm_key()
+    model, model_note = _model_for(provider, settings.llm_model)
+    settings = settings.model_copy(update={"llm_model": model})
     if provider == "template":
         return None, LLMInfo(provider, "template", "-", "LLM disabled; deterministic templates only")
     if provider == "github":
@@ -247,7 +270,7 @@ def build_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
         gh_headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
         client = OpenAICompatClient(name="github-models", url=f"{base}/chat/completions", api_key=key,
                                     model=settings.llm_model, timeout=settings.llm_timeout_s, extra_headers=gh_headers)
-        return client, LLMInfo(provider, "github-models", settings.llm_model)
+        return client, LLMInfo(provider, "github-models", settings.llm_model, model_note)
     if provider == "openai_compat":
         if not (key and settings.llm_base_url):
             return None, LLMInfo(provider, "template", settings.llm_model, "LLM_BASE_URL or LLM_API_KEY missing; using templates")
@@ -260,7 +283,7 @@ def build_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
             return None, LLMInfo(provider, "template", settings.llm_model, "LLM_API_KEY not set; using templates")
         base = (settings.llm_base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
         client = GeminiClient(api_key=key, model=settings.llm_model, base_url=base, timeout=settings.llm_timeout_s)
-        return client, LLMInfo(provider, "gemini", settings.llm_model)
+        return client, LLMInfo(provider, "gemini", settings.llm_model, model_note)
     if provider == "azure":
         endpoint, deployment = settings.azure_openai_endpoint.rstrip("/"), settings.azure_openai_deployment
         if not (key and endpoint and deployment):

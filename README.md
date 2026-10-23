@@ -75,9 +75,10 @@ Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
 
 ## Deploy: Neon + Render + Vercel
 1. **Neon:** create a project, copy the connection string (`postgresql://...?sslmode=require`).
-2. **LLM (optional):** for Gemini, set `LLM_PROVIDER=gemini`, `LLM_API_KEY` to a Google AI Studio key,
-   and leave `LLM_BASE_URL` empty. The default model is `gemini-3.8-flash`. GitHub Models remains available
-   with `LLM_PROVIDER=github`. Without an LLM key the backend uses templates.
+2. **LLM (optional), two models:** the match pipeline (narrator) uses GitHub Models (`LLM_PROVIDER=github`,
+   `GITHUB_TOKEN` with `models: read`, default model `openai/gpt-4o-mini`). The "Ask the match" chat uses Gemini
+   (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY` = Google AI Studio key, `CHAT_LLM_MODEL`, default `gemini-3.1-flash-lite`).
+   Leave `CHAT_LLM_PROVIDER` empty to make the chat share the pipeline model. Without keys the backend uses templates.
 3. **Render:** New > Blueprint, point at this repo (`render.yaml`). Set `DATABASE_URL`, `GITHUB_TOKEN` and
    `CORS_ORIGINS` (your Vercel URL). The free service sleeps when idle; the UI keeps playing on its simulator while it wakes.
 4. **Vercel:** import the repo, set **Root Directory** to `frontend`, add `VITE_API_URL` = your Render URL.

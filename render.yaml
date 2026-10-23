@@ -15,11 +15,21 @@ services:
         value: auto
       - key: DATABASE_URL        # Neon connection string, e.g. postgresql://user:pass@host/db?sslmode=require
         sync: false
-      - key: LLM_PROVIDER        # template | github | openai_compat | gemini | azure
-        value: gemini
-      - key: LLM_MODEL
-        value: gemini-3.8-flash
-      - key: LLM_API_KEY        # Google AI Studio API key; leave empty to use templates
+      # Pipeline (narrator etc.): GitHub Models
+      - key: LLM_PROVIDER
+        value: github
+      - key: LLM_MODEL          # empty = openai/gpt-4o-mini
+        value: openai/gpt-4o-mini
+      - key: GITHUB_TOKEN       # fine-grained token with the account permission "Models: Read"
         sync: false
+      # Chat ("Ask the match"): Gemini free tier
+      - key: CHAT_LLM_PROVIDER
+        value: gemini
+      - key: CHAT_LLM_MODEL
+        value: gemini-3.1-flash-lite
+      - key: CHAT_LLM_API_KEY   # Google AI Studio API key
+        sync: false
+      - key: WARM_ON_START
+        value: "false"
       - key: CORS_ORIGINS        # your Vercel production URL, e.g. https://match-insights.vercel.app
         sync: false
