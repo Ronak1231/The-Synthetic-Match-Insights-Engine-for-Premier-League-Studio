@@ -28,9 +28,8 @@ class MatchService:
                  chat_llm: OpenAICompatClient | None = None, chat_llm_info: LLMInfo | None = None) -> None:
         self.settings = settings
         self.store = store
-        self.llm = llm                      # narrator / pipeline model (e.g. GitHub Models)
+        self.llm = llm
         self.llm_info = llm_info
-        # The chat has its own model (e.g. Gemini free tier). Not given -> it shares the pipeline model.
         self.chat_llm = chat_llm if chat_llm_info is not None else llm
         self.chat_llm_info = chat_llm_info if chat_llm_info is not None else llm_info
         self.personalizer = PersonalizerAgent()
@@ -102,7 +101,8 @@ class MatchService:
                         "seeds": self.settings.llm_seed_allowlist},
                 "store": {"active": self.store.name}, "agents": ["ingest", "interpreter", "explainer", "narrator",
                                                                  "overlay", "personalizer", "chat"],
-                "chat": {"llm": self.chat_llm_info.active if self.chat.llm else "rules-only", "model": self.chat_llm_info.model if self.chat.llm else "-",
+                "chat": {"llm": self.chat_llm_info.active if self.chat.llm else "rules-only",
+                         "model": self.chat_llm_info.model if self.chat.llm else "-",
                          "requested": self.chat_llm_info.provider, "note": self.chat_llm_info.note,
                          "tools": ["match_summary", "team_stats", "player_stats", "top_players", "shots", "goals",
                                    "key_moments", "phases", "compare_halves", "momentum", "whatif"]}}

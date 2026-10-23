@@ -79,8 +79,12 @@ Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
    `GITHUB_TOKEN` with `models: read`, default model `openai/gpt-4o-mini`). The "Ask the match" chat uses Gemini
    (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY` = Google AI Studio key, `CHAT_LLM_MODEL`, default `gemini-3.1-flash-lite`).
    Leave `CHAT_LLM_PROVIDER` empty to make the chat share the pipeline model. Without keys the backend uses templates.
-3. **Render:** New > Blueprint, point at this repo (`render.yaml`). Set `DATABASE_URL`, `GITHUB_TOKEN` and
-   `CORS_ORIGINS` (your Vercel URL). The free service sleeps when idle; the UI keeps playing on its simulator while it wakes.
+3. **Render (free, dashboard setup):** create a **New Web Service** connected to this GitHub repository and `main`.
+   Choose **Docker**, set **Root Directory** to `.`, **Dockerfile Path** to `./Dockerfile`, and **Docker Context** to `.`.
+   Select the Free instance. Add `GITHUB_TOKEN`, `CHAT_LLM_API_KEY`, `DATABASE_URL` (if using Neon), and
+   `CORS_ORIGINS` (your exact Vercel URL) as environment variables. The `LLM_*` and `CHAT_LLM_*` defaults are
+   in `render.yaml`; set them manually in the dashboard because this setup does not require a Blueprint.
+   The free service sleeps when idle; the UI keeps playing on its simulator while it wakes.
 4. **Vercel:** import the repo, set **Root Directory** to `frontend`, add `VITE_API_URL` = your Render URL.
 5. Open the site: the studio panel should say *Backend live*.
 
@@ -98,7 +102,7 @@ real browser by its author yet.
 ## Free stack (no Azure account needed)
 | Need | Free option used |
 |---|---|
-| LLM (optional) | Gemini via Google AI Studio (`LLM_PROVIDER=gemini`, `LLM_API_KEY`); GitHub Models via a GitHub token with `models: read` (`LLM_PROVIDER=github`); or local Ollama via `LLM_PROVIDER=openai_compat`. |
+| LLM (optional) | Match pipeline: GitHub Models (`LLM_PROVIDER=github`, `GITHUB_TOKEN`). Chat: Gemini via Google AI Studio (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY`). |
 | Hosting | Vercel (frontend), Render free web service (API), Neon free Postgres. Ping `/api/health` every 10 minutes with a free monitor to stop the API sleeping during judging. |
 | Voice, video | Browser Web Speech API, canvas + MediaRecorder |
 | Dev tooling | GitHub, GitHub Copilot, GitHub Actions (CI in `.github/workflows/ci.yml`) |
@@ -111,7 +115,7 @@ explains the result in plain language, without printing any secret.
 - *"answered 200 but with plain text"*: `LLM_BASE_URL` points at a web page, not the model API. With `LLM_PROVIDER=github`
   leave `LLM_BASE_URL` empty (the default is `https://models.github.ai/inference`).
 - *"rejected the token"*: create a GitHub token with `models: read`, set `GITHUB_TOKEN`, redeploy.
-- *"404"*: wrong base URL or model id. For Gemini, use `LLM_PROVIDER=gemini`, leave `LLM_BASE_URL` empty,
-  and use a model available to your API key such as `gemini-3.8-flash`.
+- *"404"*: wrong base URL or model id. For the Gemini chat provider, use `CHAT_LLM_PROVIDER=gemini`, leave
+  `CHAT_LLM_BASE_URL` empty, and use a model available to your API key such as `gemini-3.1-flash-lite`.
 - *"rate limited"*: free-tier limit; the match warm-up at startup uses the same quota (`WARM_ON_START=false` saves it).
 Chat keeps working while the model is broken: the built-in analyst answers, and a misconfigured model is not retried for 5 minutes.

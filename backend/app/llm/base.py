@@ -238,20 +238,29 @@ DEFAULT_MODELS = {"github": "openai/gpt-4o-mini", "gemini": "gemini-3.1-flash-li
 
 
 def _model_for(provider: str, model: str) -> tuple[str, str]:
-    """Return (model, note). Fills in a default and repairs a model id that belongs to another provider."""
+    """Return a provider-compatible model, filling defaults and reporting invalid IDs."""
     model = (model or "").strip()
     if not model:
         return DEFAULT_MODELS.get(provider, "-"), ""
     if provider == "github" and "/" not in model:
-        return DEFAULT_MODELS["github"], f"model {model!r} is not a GitHub Models id (publisher/name); using {DEFAULT_MODELS['github']}"
+        fallback = DEFAULT_MODELS["github"]
+        return fallback, f"model {model!r} is not a GitHub Models id (publisher/name); using {fallback}"
     if provider == "gemini" and "/" in model:
-        return DEFAULT_MODELS["gemini"], f"model {model!r} is not a Gemini id; using {DEFAULT_MODELS['gemini']}"
+        fallback = DEFAULT_MODELS["gemini"]
+        return fallback, f"model {model!r} is not a Gemini id; using {fallback}"
     return model, ""
 
 
 def build_chat_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
-    """LLM used only by the "Ask the match" chat. Falls back to the main LLM when CHAT_LLM_PROVIDER is empty."""
-    return build_llm(settings.for_chat())
+    """Build the chat model independently, or reuse the pipeline model when unset."""
+    if not settings.chat_llm_provider:
+        return build_llm(settings)
+    client, info = build_llm(settings.for_chat())
+    if info.note == "LLM_API_KEY not set; using templates":
+        info.note = "CHAT_LLM_API_KEY not set; chat will use built-in answers"
+    elif info.note == "GITHUB_TOKEN not set; using templates":
+        info.note = "CHAT_LLM_PROVIDER=github but GITHUB_TOKEN is not set; chat will use built-in answers"
+    return client, info
 
 
 def build_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:

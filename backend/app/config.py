@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # gemini      : Google Gemini Generative Language API
     # azure        : Azure OpenAI / Microsoft Foundry deployment
     llm_provider: Literal["template", "github", "openai_compat", "gemini", "azure"] = "template"
-    llm_model: str = ""              # empty = a sensible default for the provider (github: openai/gpt-4o-mini)
+    llm_model: str = "gemini-3.8-flash"
     llm_base_url: str = ""
     llm_api_key: str = ""
     github_token: str = ""
@@ -43,10 +43,7 @@ class Settings(BaseSettings):
     llm_seed_allowlist: str = "40"  # seeds allowed to call the LLM (spend guard); others use templates
 
     # --- Chat agent ("Ask the match") ------------------------------------------------
-    # The chat can use a DIFFERENT model from the rest of the pipeline. Typical split:
-    #   LLM_PROVIDER=github + GITHUB_TOKEN          -> narrator / explainer (match build)
-    #   CHAT_LLM_PROVIDER=gemini + CHAT_LLM_API_KEY -> "Ask the match" only (Gemini free tier)
-    # Leave CHAT_LLM_PROVIDER empty to make the chat reuse the main LLM above.
+    # Leave CHAT_LLM_PROVIDER empty to reuse the pipeline model.
     chat_llm_provider: Literal["", "template", "github", "openai_compat", "gemini", "azure"] = ""
     chat_llm_model: str = ""
     chat_llm_base_url: str = ""
@@ -56,7 +53,7 @@ class Settings(BaseSettings):
     chat_use_llm: bool = True
     chat_llm_per_minute: int = 10      # LLM-backed chat messages per client per minute (rules are not counted)
     chat_requests_per_minute: int = 40  # all chat messages per client per minute
-    chat_llm_timeout_s: float = 12.0
+    chat_llm_timeout_s: float = 9.0
     chat_max_chars: int = 300
 
     # --- Storage --------------------------------------------------------------
@@ -81,12 +78,14 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     def for_chat(self) -> "Settings":
-        """Settings view in which the main LLM fields describe the chat model (used by build_chat_llm)."""
+        """Return settings with the chat-specific provider mapped to the shared LLM factory."""
         if not self.chat_llm_provider:
             return self
         return self.model_copy(update={
-            "llm_provider": self.chat_llm_provider, "llm_model": self.chat_llm_model,
-            "llm_base_url": self.chat_llm_base_url, "llm_api_key": self.chat_llm_api_key,
+            "llm_provider": self.chat_llm_provider,
+            "llm_model": self.chat_llm_model,
+            "llm_base_url": self.chat_llm_base_url,
+            "llm_api_key": self.chat_llm_api_key,
             "llm_timeout_s": max(self.llm_timeout_s, self.chat_llm_timeout_s),
         })
 

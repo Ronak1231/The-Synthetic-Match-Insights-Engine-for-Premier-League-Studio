@@ -6,8 +6,7 @@ def diagnose(provider: str, probe: dict) -> dict:
     """Return {ok, problem, hint}. ``provider`` is the configured LLM_PROVIDER."""
     if "error" in probe:
         return {"ok": False, "problem": "the provider could not be reached",
-                "hint": "Check the base URL setting (it must be an https URL; leave it empty for the default) and that the host is reachable from Render. "
-                        "A timeout usually means the model is slow or the free tier is throttled; try a lighter model. " + probe["error"]}
+                "hint": "Check LLM_BASE_URL (it must be an https URL) and that the host is reachable from Render. " + probe["error"]}
     st = probe["status"]
     if st == 200 and (probe.get("hasChoices") or probe.get("hasContent")):
         return {"ok": True, "problem": "", "hint": ""}
@@ -29,7 +28,7 @@ def diagnose(provider: str, probe: dict) -> dict:
     if st in (401, 403):
         return {"ok": False, "problem": f"the provider rejected the token (HTTP {st})",
                 "hint": ("Create a GitHub token that can use GitHub Models (permission 'models: read') and set it as GITHUB_TOKEN. "
-                         if provider == "github" else "Check the API key for this provider (CHAT_LLM_API_KEY for the chat, LLM_API_KEY / GITHUB_TOKEN for the pipeline).") + "Redeploy after changing it."}
+                         if provider == "github" else "Check LLM_API_KEY.") + "Redeploy after changing it."}
     if st == 404:
         return {"ok": False, "problem": "the provider answered 404 (not found)",
                 "hint": gh + ("Use the native Gemini provider with LLM_BASE_URL empty and a model such as gemini-3.8-flash. "

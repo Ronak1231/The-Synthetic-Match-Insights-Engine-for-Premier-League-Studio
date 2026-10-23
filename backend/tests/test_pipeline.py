@@ -8,7 +8,7 @@ from app.agents.narrator import NarratorAgent, grounded, numbers_in, validate_ll
 from app.config import Settings
 from app.domain.engine import MatchEngine
 from app.domain.simulator import simulate_match
-from app.llm.base import LLMError, build_llm, parse_json_object
+from app.llm.base import LLMError, build_chat_llm, build_llm, parse_json_object
 from app.service import MatchService
 from app.store.memory import MemoryStore
 from app.store.sql import SqlStore, normalize_url
@@ -137,8 +137,42 @@ def test_llm_provider_selection_from_config():
                                  azure_openai_api_key="k", azure_openai_deployment="gpt-4o-mini"))
     assert c and c._url.endswith("/openai/v1/chat/completions") and c._headers["api-key"] == "k"
     c, info = build_llm(Settings(llm_provider="gemini", llm_api_key="k"))
-    assert c and info.active == "gemini" and c.endpoint.endswith("/v1beta/models/gemini-3.1-flash-lite:generateContent")
+    assert c and info.active == "gemini" and c.endpoint.endswith("/v1beta/models/gemini-3.8-flash:generateContent")
     assert "key=k" not in c.endpoint
+
+
+def test_pipeline_and_chat_can_use_separate_providers():
+    settings = Settings(
+        llm_provider="github",
+        llm_model="openai/gpt-4o-mini",
+        github_token="github-secret",
+        chat_llm_provider="gemini",
+        chat_llm_model="gemini-3.1-flash-lite",
+        chat_llm_api_key="google-secret",
+    )
+    pipeline, pipeline_info = build_llm(settings)
+    chat, chat_info = build_chat_llm(settings)
+
+    assert pipeline is not None and pipeline_info.active == "github-models"
+    assert pipeline._headers["Authorization"] == "Bearer github-secret"
+    assert chat is not None and chat_info.active == "gemini"
+    assert chat.model == "gemini-3.1-flash-lite"
+    assert "google-secret" not in chat.endpoint
+
+    service = MatchService(settings, MemoryStore(), pipeline, pipeline_info, chat, chat_info)
+    assert service.llm is pipeline and service.chat.llm is chat
+    config = service.config()
+    assert config["llm"]["active"] == "github-models"
+    assert config["chat"]["llm"] == "gemini"
+    assert config["chat"]["model"] == "gemini-3.1-flash-lite"
+
+
+def test_chat_provider_empty_reuses_pipeline_model():
+    settings = Settings(llm_provider="github", github_token="token")
+    pipeline, pipeline_info = build_llm(settings)
+    chat, chat_info = build_chat_llm(settings)
+    assert chat is not None and pipeline is not None
+    assert chat._url == pipeline._url and chat_info.active == pipeline_info.active
 
 
 def test_parse_json_object_tolerates_fences():
@@ -201,37 +235,3 @@ def test_default_match_is_warmed_at_startup():
                 break
             time.sleep(0.1)
     assert any(k.startswith("40:") for k in svc._hot)
-
-
-def test_chat_and_pipeline_can_use_different_providers():
-    from app.llm.base import build_chat_llm
-    s = Settings(store_provider="memory", llm_provider="github", github_token="gh", llm_model="gemini-3.8-flash",
-                 chat_llm_provider="gemini", chat_llm_api_key="gk", chat_llm_model="gemini-3.1-flash-lite")
-    llm, info = build_llm(s)
-    chat, cinfo = build_chat_llm(s)
-    assert info.active == "github-models" and info.model == "openai/gpt-4o-mini" and "not a GitHub Models id" in info.note
-    assert cinfo.active == "gemini" and cinfo.model == "gemini-3.1-flash-lite" and "key=gk" in chat._url
-    svc = MatchService(s, MemoryStore(), llm, info, chat, cinfo)
-    assert svc.llm is llm and svc.chat.llm is chat
-    assert svc.variant(40).startswith("github-models")           # bundle variant follows the pipeline model
-    cfg = svc.config()
-    assert cfg["llm"]["active"] == "github-models" and cfg["chat"]["llm"] == "gemini"
-
-
-def test_chat_shares_pipeline_llm_when_no_chat_provider_set():
-    from app.llm.base import build_chat_llm
-    s = Settings(llm_provider="github", github_token="gh")
-    llm, info = build_llm(s)
-    chat, cinfo = build_chat_llm(s)
-    assert cinfo.active == "github-models" and chat is not None
-    svc = MatchService(s, MemoryStore(), llm, info)
-    assert svc.chat.llm is llm
-
-
-def test_chat_can_be_gemini_while_pipeline_has_no_llm():
-    from app.llm.base import build_chat_llm
-    s = Settings(llm_provider="template", chat_llm_provider="gemini", chat_llm_api_key="gk")
-    llm, info = build_llm(s)
-    chat, cinfo = build_chat_llm(s)
-    assert llm is None and chat is not None and cinfo.active == "gemini"
-    assert MatchService(s, MemoryStore(), llm, info, chat, cinfo).chat.llm is chat

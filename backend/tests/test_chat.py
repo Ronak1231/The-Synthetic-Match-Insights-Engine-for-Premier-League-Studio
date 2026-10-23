@@ -8,7 +8,7 @@ from app.agents.chat import ChatAgent, RateLimiter, clean_args, is_grounded, pla
 from app.agents.chat_tools import MatchData
 from app.config import Settings
 from app.domain.simulator import simulate_match
-from app.llm.base import LLMError, build_llm
+from app.llm.base import LLMError, build_chat_llm, build_llm
 from app.main import create_app
 from app.service import MatchService
 from app.store.memory import MemoryStore
@@ -25,7 +25,26 @@ def bundle():
 
 def client(settings=S):
     llm, info = build_llm(settings)
-    return TestClient(create_app(settings, MatchService(settings, MemoryStore(), llm, info)))
+    chat_llm, chat_info = build_chat_llm(settings)
+    return TestClient(create_app(settings, MatchService(settings, MemoryStore(), llm, info, chat_llm, chat_info)))
+
+
+def test_api_config_reports_separate_pipeline_and_chat_providers():
+    settings = Settings(
+        store_provider="memory",
+        warm_on_start=False,
+        llm_provider="github",
+        llm_model="openai/gpt-4o-mini",
+        github_token="github-secret",
+        chat_llm_provider="gemini",
+        chat_llm_model="gemini-3.1-flash-lite",
+        chat_llm_api_key="google-secret",
+    )
+    with TestClient(create_app(settings)) as c:
+        config = c.get("/api/config").json()
+    assert config["llm"]["active"] == "github-models"
+    assert config["chat"]["llm"] == "gemini"
+    assert config["chat"]["model"] == "gemini-3.1-flash-lite"
 
 
 @pytest.mark.parametrize("question,tool", [
