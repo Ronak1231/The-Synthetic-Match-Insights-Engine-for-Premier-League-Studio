@@ -2,11 +2,10 @@
 services:
   - type: web
     name: match-insights-api
-    runtime: python
+    runtime: docker
     plan: free
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
