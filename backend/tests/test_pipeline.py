@@ -9,6 +9,7 @@ from app.config import Settings
 from app.domain.engine import MatchEngine
 from app.domain.simulator import simulate_match
 from app.llm.base import LLMError, build_chat_llm, build_llm, parse_json_object
+from app.llm.diagnose import diagnose
 from app.service import MatchService
 from app.store.memory import MemoryStore
 from app.store.sql import SqlStore, normalize_url
@@ -136,8 +137,29 @@ def test_llm_provider_selection_from_config():
                                  azure_openai_api_key="k", azure_openai_deployment="gpt-4o-mini"))
     assert c and c._url.endswith("/openai/v1/chat/completions") and c._headers["api-key"] == "k"
     c, info = build_llm(Settings(llm_provider="gemini", llm_api_key="k"))
-    assert c and info.active == "gemini" and c.endpoint.endswith("/v1beta/models/gemini-3.8-flash:generateContent")
+    assert c and info.active == "gemini" and c.endpoint.endswith("/v1beta/models/gemini-3.1-flash-lite:generateContent")
     assert "key=k" not in c.endpoint
+
+
+@pytest.mark.parametrize(
+    ("probe", "problem"),
+    [
+        ({"status": 503, "preview": "high demand"}, "temporarily overloaded"),
+        ({"status": 504, "preview": "gateway timeout"}, "timed out"),
+        ({"error": "ReadTimeout"}, "request timed out"),
+    ],
+)
+def test_gemini_diagnostics_explain_temporary_load(probe, problem):
+    result = diagnose("gemini", probe)
+    assert result["ok"] is False
+    assert problem in result["problem"]
+    assert "gemini-3.1-flash-lite" in result["hint"]
+
+
+def test_gemini_404_diagnostic_does_not_raise():
+    result = diagnose("gemini", {"status": 404, "preview": "not found"})
+    assert result["ok"] is False
+    assert "gemini-3.1-flash-lite" in result["hint"]
 
 
 def test_invalid_provider_validation_does_not_print_input_value():

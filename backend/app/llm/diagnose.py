@@ -9,6 +9,13 @@ def diagnose(provider: str, probe: dict) -> dict:
                 "hint": "GitHub retired its Models inference API on July 30, 2026. Switch to Gemini with "
                         "LLM_PROVIDER=gemini and set LLM_API_KEY to a Google AI Studio API key."}
     if "error" in probe:
+        if "timeout" in probe["error"].lower():
+            if provider == "gemini":
+                return {"ok": False, "problem": "the model request timed out",
+                        "hint": "This can happen during Gemini demand spikes. Set LLM_MODEL to gemini-3.1-flash-lite, "
+                                "leave LLM_BASE_URL empty, and retry shortly."}
+            return {"ok": False, "problem": "the model request timed out",
+                    "hint": "The provider did not respond before the timeout. Check provider availability and retry shortly."}
         return {"ok": False, "problem": "the provider could not be reached",
                 "hint": "Check LLM_BASE_URL (it must be an https URL) and that the host is reachable from Render. " + probe["error"]}
     st = probe["status"]
@@ -27,8 +34,8 @@ def diagnose(provider: str, probe: dict) -> dict:
                 "hint": "Check LLM_API_KEY and redeploy after changing it."}
     if st == 404:
         return {"ok": False, "problem": "the provider answered 404 (not found)",
-                "hint": gh + ("Use the native Gemini provider with LLM_BASE_URL empty and a model such as gemini-3.8-flash. "
-                              if provider == "gemini" else "") +
+                "hint": ("Use the native Gemini provider with LLM_BASE_URL empty and a model such as gemini-3.1-flash-lite. "
+                         if provider == "gemini" else "") +
                         "The base URL or the model name is wrong."}
     if st == 400:
         return {"ok": False, "problem": "the provider rejected the request (HTTP 400)",
@@ -36,4 +43,11 @@ def diagnose(provider: str, probe: dict) -> dict:
     if st == 429:
         return {"ok": False, "problem": "rate limited (HTTP 429)",
                 "hint": "The free tier is at its limit. Wait a minute; the match warm-up at startup uses the same quota (set WARM_ON_START=false to save it)."}
+    if st == 503:
+        return {"ok": False, "problem": "the model is temporarily overloaded (HTTP 503)",
+                "hint": "The provider reports high demand. Set LLM_MODEL to gemini-3.1-flash-lite, then retry after a short wait. "
+                        + probe.get("preview", "")[:160]}
+    if st == 504:
+        return {"ok": False, "problem": "the model provider timed out (HTTP 504)",
+                "hint": "Retry shortly and use gemini-3.1-flash-lite if the timeout persists. " + probe.get("preview", "")[:120]}
     return {"ok": False, "problem": f"unexpected HTTP {st}", "hint": probe["preview"][:120]}

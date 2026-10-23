@@ -19,7 +19,7 @@ services:
       - key: LLM_PROVIDER
         value: gemini
       - key: LLM_MODEL
-        value: gemini-3.8-flash
+        value: gemini-3.1-flash-lite
       - key: LLM_API_KEY        # Google AI Studio key
         sync: false
       # Chat ("Ask the match"): Gemini free tier

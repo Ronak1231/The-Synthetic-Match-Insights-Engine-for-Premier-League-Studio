@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # gemini      : Google Gemini Generative Language API
     # azure        : Azure OpenAI / Microsoft Foundry deployment
     llm_provider: Literal["template", "github", "openai_compat", "gemini", "azure"] = "template"
-    llm_model: str = "gemini-3.8-flash"
+    llm_model: str = "gemini-3.1-flash-lite"
     llm_base_url: str = ""
     llm_api_key: str = ""
     github_token: str = ""

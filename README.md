@@ -76,7 +76,7 @@ Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
 ## Deploy: Neon + Render + Vercel
 1. **Neon:** create a project, copy the connection string (`postgresql://...?sslmode=require`).
 2. **LLM (optional):** GitHub Models inference was retired on July 30, 2026. Configure Gemini for the match pipeline
-   (`LLM_PROVIDER=gemini`, `LLM_API_KEY` = Google AI Studio key, `LLM_MODEL=gemini-3.8-flash`) and chat
+   (`LLM_PROVIDER=gemini`, `LLM_API_KEY` = Google AI Studio key, `LLM_MODEL=gemini-3.1-flash-lite`) and chat
    (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY`, `CHAT_LLM_MODEL=gemini-3.1-flash-lite`). The same Gemini key
    can be used for both. Leave `CHAT_LLM_PROVIDER` empty to make chat share the pipeline model. Without keys,
    the backend uses templates.
@@ -115,6 +115,8 @@ Open the Lab, Ask tab, and press **Check AI connection** (or `GET /api/llm/check
 explains the result in plain language, without printing any secret.
 - *"GitHub Models inference has been retired"*: use `LLM_PROVIDER=gemini`, set `LLM_API_KEY` to a Google AI Studio
   key, and leave `LLM_BASE_URL` blank. Configure `CHAT_LLM_*` similarly if chat should use a separate Gemini model.
+- *"the model is temporarily overloaded (HTTP 503)"* or *"the model request timed out"*: set the affected model
+  variable (`LLM_MODEL` or `CHAT_LLM_MODEL`) to `gemini-3.1-flash-lite` and retry shortly.
 - *"answered 200 but with plain text"*: verify the provider and its expected API base URL; for Gemini, leave
   `LLM_BASE_URL` blank to use Google's default endpoint.
 - *"404"*: wrong base URL or model id. For the Gemini chat provider, use `CHAT_LLM_PROVIDER=gemini`, leave
