@@ -1,7 +1,7 @@
 """Environment-driven settings.
 
-Every external dependency (LLM, database, hosting origin) is chosen here, so moving
-from Render + Neon + GitHub Models to Azure is a change of environment variables only.
+Every external dependency (LLM, database, hosting origin) is chosen here, so changing
+model providers or moving to Azure is a change of environment variables only.
 See .env.example for the full list.
 """
 from functools import lru_cache
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # --- LLM provider ---------------------------------------------------------
     # template     : no LLM, deterministic templates only (always works, costs nothing)
-    # github       : GitHub Models (free with a GitHub token)
+    # github       : retired GitHub Models (kept to provide a clear fallback message)
     # openai_compat: any OpenAI-compatible /chat/completions endpoint
     # gemini      : Google Gemini Generative Language API
     # azure        : Azure OpenAI / Microsoft Foundry deployment

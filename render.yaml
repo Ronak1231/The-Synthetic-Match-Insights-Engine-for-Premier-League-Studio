@@ -15,12 +15,12 @@ services:
         value: auto
       - key: DATABASE_URL        # Neon connection string, e.g. postgresql://user:pass@host/db?sslmode=require
         sync: false
-      # Pipeline (narrator etc.): GitHub Models
+      # Pipeline (narrator etc.): Gemini
       - key: LLM_PROVIDER
-        value: github
-      - key: LLM_MODEL          # empty = openai/gpt-4o-mini
-        value: openai/gpt-4o-mini
-      - key: GITHUB_TOKEN       # fine-grained token with the account permission "Models: Read"
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-3.8-flash
+      - key: LLM_API_KEY        # Google AI Studio key
         sync: false
       # Chat ("Ask the match"): Gemini free tier
       - key: CHAT_LLM_PROVIDER

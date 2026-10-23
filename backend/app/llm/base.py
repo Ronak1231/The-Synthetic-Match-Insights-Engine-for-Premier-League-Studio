@@ -233,8 +233,11 @@ class GeminiClient(OpenAICompatClient):
         raise LLMError(str(last))
 
 
-DEFAULT_MODELS = {"github": "openai/gpt-4o-mini", "gemini": "gemini-3.1-flash-lite",
-                  "openai_compat": "gpt-4o-mini", "azure": ""}
+DEFAULT_MODELS = {"gemini": "gemini-3.1-flash-lite", "openai_compat": "gpt-4o-mini", "azure": ""}
+GITHUB_MODELS_RETIRED_NOTE = (
+    "GitHub Models inference was retired on July 30, 2026; using templates. "
+    "Set LLM_PROVIDER=gemini and LLM_API_KEY to use Gemini instead."
+)
 
 
 def _model_for(provider: str, model: str) -> tuple[str, str]:
@@ -242,9 +245,6 @@ def _model_for(provider: str, model: str) -> tuple[str, str]:
     model = (model or "").strip()
     if not model:
         return DEFAULT_MODELS.get(provider, "-"), ""
-    if provider == "github" and "/" not in model:
-        fallback = DEFAULT_MODELS["github"]
-        return fallback, f"model {model!r} is not a GitHub Models id (publisher/name); using {fallback}"
     if provider == "gemini" and "/" in model:
         fallback = DEFAULT_MODELS["gemini"]
         return fallback, f"model {model!r} is not a Gemini id; using {fallback}"
@@ -258,28 +258,19 @@ def build_chat_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMIn
     client, info = build_llm(settings.for_chat())
     if info.note == "LLM_API_KEY not set; using templates":
         info.note = "CHAT_LLM_API_KEY not set; chat will use built-in answers"
-    elif info.note == "GITHUB_TOKEN not set; using templates":
-        info.note = "CHAT_LLM_PROVIDER=github but GITHUB_TOKEN is not set; chat will use built-in answers"
     return client, info
 
 
 def build_llm(settings: Settings) -> tuple[OpenAICompatClient | None, LLMInfo]:
     """Pick the LLM from configuration. Returns (client or None, status for /api/config)."""
     provider = settings.llm_provider
+    if provider == "github":
+        return None, LLMInfo(provider, "template", settings.llm_model, GITHUB_MODELS_RETIRED_NOTE)
     key = settings.resolved_llm_key()
     model, model_note = _model_for(provider, settings.llm_model)
     settings = settings.model_copy(update={"llm_model": model})
     if provider == "template":
         return None, LLMInfo(provider, "template", "-", "LLM disabled; deterministic templates only")
-    if provider == "github":
-        if not key:
-            return None, LLMInfo(provider, "template", settings.llm_model, "GITHUB_TOKEN not set; using templates")
-        base = (settings.llm_base_url or "https://models.github.ai/inference").rstrip("/")
-        # Headers as documented for the GitHub Models REST API.
-        gh_headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
-        client = OpenAICompatClient(name="github-models", url=f"{base}/chat/completions", api_key=key,
-                                    model=settings.llm_model, timeout=settings.llm_timeout_s, extra_headers=gh_headers)
-        return client, LLMInfo(provider, "github-models", settings.llm_model, model_note)
     if provider == "openai_compat":
         if not (key and settings.llm_base_url):
             return None, LLMInfo(provider, "template", settings.llm_model, "LLM_BASE_URL or LLM_API_KEY missing; using templates")

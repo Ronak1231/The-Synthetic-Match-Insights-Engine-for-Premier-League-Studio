@@ -33,16 +33,16 @@ def test_api_config_reports_separate_pipeline_and_chat_providers():
     settings = Settings(
         store_provider="memory",
         warm_on_start=False,
-        llm_provider="github",
-        llm_model="openai/gpt-4o-mini",
-        github_token="github-secret",
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_api_key="pipeline-secret",
         chat_llm_provider="gemini",
         chat_llm_model="gemini-3.1-flash-lite",
         chat_llm_api_key="google-secret",
     )
     with TestClient(create_app(settings)) as c:
         config = c.get("/api/config").json()
-    assert config["llm"]["active"] == "github-models"
+    assert config["llm"]["active"] == "gemini"
     assert config["chat"]["llm"] == "gemini"
     assert config["chat"]["model"] == "gemini-3.1-flash-lite"
 

@@ -53,8 +53,8 @@ a "better option", which is a property of this simplified model and the generate
 ## What is not
 - Not built on Microsoft Agent Framework: the orchestrator is a small in-repo implementation.
 - Nothing is deployed to Azure. Azure OpenAI/Foundry and Cosmos DB adapters exist behind configuration but are
-  untested against a real account (see `azure/SWITCHING_TO_AZURE.md`). The GitHub Models and Azure endpoints used
-  by the LLM client should be checked against current documentation before relying on them.
+  untested against a real account (see `azure/SWITCHING_TO_AZURE.md`). GitHub Models inference was retired on
+  July 30, 2026; use Gemini or a supported OpenAI-compatible provider instead.
 - No auto-eventing from video (the film is generated *from* events, not the reverse), and one focus player at a time.
 - Chat needs the backend; the other lab tabs run in the browser. Without an LLM, chat answers are English templates; with one,
   they follow the selected language. The what-if model covers shots only (not passes, substitutions or formations).
@@ -75,13 +75,14 @@ Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
 
 ## Deploy: Neon + Render + Vercel
 1. **Neon:** create a project, copy the connection string (`postgresql://...?sslmode=require`).
-2. **LLM (optional), two models:** the match pipeline (narrator) uses GitHub Models (`LLM_PROVIDER=github`,
-   `GITHUB_TOKEN` with `models: read`, default model `openai/gpt-4o-mini`). The "Ask the match" chat uses Gemini
-   (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY` = Google AI Studio key, `CHAT_LLM_MODEL`, default `gemini-3.1-flash-lite`).
-   Leave `CHAT_LLM_PROVIDER` empty to make the chat share the pipeline model. Without keys the backend uses templates.
+2. **LLM (optional):** GitHub Models inference was retired on July 30, 2026. Configure Gemini for the match pipeline
+   (`LLM_PROVIDER=gemini`, `LLM_API_KEY` = Google AI Studio key, `LLM_MODEL=gemini-3.8-flash`) and chat
+   (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY`, `CHAT_LLM_MODEL=gemini-3.1-flash-lite`). The same Gemini key
+   can be used for both. Leave `CHAT_LLM_PROVIDER` empty to make chat share the pipeline model. Without keys,
+   the backend uses templates.
 3. **Render (free, dashboard setup):** create a **New Web Service** connected to this GitHub repository and `main`.
    Choose **Docker**, set **Root Directory** to `.`, **Dockerfile Path** to `./Dockerfile`, and **Docker Context** to `.`.
-   Select the Free instance. Add `GITHUB_TOKEN`, `CHAT_LLM_API_KEY`, `DATABASE_URL` (if using Neon), and
+   Select the Free instance. Add `LLM_API_KEY`, `CHAT_LLM_API_KEY`, `DATABASE_URL` (if using Neon), and
    `CORS_ORIGINS` (your exact Vercel URL) as environment variables. The `LLM_*` and `CHAT_LLM_*` defaults are
    in `render.yaml`; set them manually in the dashboard because this setup does not require a Blueprint.
    The free service sleeps when idle; the UI keeps playing on its simulator while it wakes.
@@ -89,7 +90,7 @@ Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
 5. Open the site: the studio panel should say *Backend live*.
 
 ## Configuration
-All switches are environment variables, listed in `backend/.env.example`: `LLM_PROVIDER` (`template`, `github`,
+All switches are environment variables, listed in `backend/.env.example`: `LLM_PROVIDER` (`template`, `github` (retired),
 `openai_compat`, `gemini`, `azure`), `STORE_PROVIDER` (`auto`, `memory`, `sql`, `cosmos`), `DATABASE_URL`, CORS settings, and
 LLM spend guards (`LLM_SEED_ALLOWLIST`, `LLM_MAX_CALLS_PER_MATCH`). Moving to Azure is a change of these values.
 
@@ -102,19 +103,20 @@ real browser by its author yet.
 ## Free stack (no Azure account needed)
 | Need | Free option used |
 |---|---|
-| LLM (optional) | Match pipeline: GitHub Models (`LLM_PROVIDER=github`, `GITHUB_TOKEN`). Chat: Gemini via Google AI Studio (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY`). |
+| LLM (optional) | Gemini via Google AI Studio for the match pipeline (`LLM_PROVIDER=gemini`, `LLM_API_KEY`) and chat (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY`). |
 | Hosting | Vercel (frontend), Render free web service (API), Neon free Postgres. Ping `/api/health` every 10 minutes with a free monitor to stop the API sleeping during judging. |
 | Voice, video | Browser Web Speech API, canvas + MediaRecorder |
 | Dev tooling | GitHub, GitHub Copilot, GitHub Actions (CI in `.github/workflows/ci.yml`) |
 
-Check current GitHub Models limits before the demo; they change. With no token the app still works end to end on templates.
+With no Gemini key the app still works end to end on templates.
 
 ## Troubleshooting the AI model
 Open the Lab, Ask tab, and press **Check AI connection** (or `GET /api/llm/check` on the backend). It sends one tiny request and
 explains the result in plain language, without printing any secret.
-- *"answered 200 but with plain text"*: `LLM_BASE_URL` points at a web page, not the model API. With `LLM_PROVIDER=github`
-  leave `LLM_BASE_URL` empty (the default is `https://models.github.ai/inference`).
-- *"rejected the token"*: create a GitHub token with `models: read`, set `GITHUB_TOKEN`, redeploy.
+- *"GitHub Models inference has been retired"*: use `LLM_PROVIDER=gemini`, set `LLM_API_KEY` to a Google AI Studio
+  key, and leave `LLM_BASE_URL` blank. Configure `CHAT_LLM_*` similarly if chat should use a separate Gemini model.
+- *"answered 200 but with plain text"*: verify the provider and its expected API base URL; for Gemini, leave
+  `LLM_BASE_URL` blank to use Google's default endpoint.
 - *"404"*: wrong base URL or model id. For the Gemini chat provider, use `CHAT_LLM_PROVIDER=gemini`, leave
   `CHAT_LLM_BASE_URL` empty, and use a model available to your API key such as `gemini-3.1-flash-lite`.
 - *"rate limited"*: free-tier limit; the match warm-up at startup uses the same quota (`WARM_ON_START=false` saves it).

@@ -129,10 +129,9 @@ def test_critical_agent_failure_aborts():
 def test_llm_provider_selection_from_config():
     assert build_llm(Settings(llm_provider="template"))[0] is None
     c, info = build_llm(Settings(llm_provider="github", github_token="t"))
-    assert c and info.active == "github-models" and "models.github.ai" in c._url
-    assert c._headers["Authorization"] == "Bearer " + "t"
+    assert c is None and info.active == "template" and "retired" in info.note
     c, info = build_llm(Settings(llm_provider="github"))
-    assert c is None and "GITHUB_TOKEN" in info.note
+    assert c is None and "retired" in info.note
     c, info = build_llm(Settings(llm_provider="azure", azure_openai_endpoint="https://x.openai.azure.com",
                                  azure_openai_api_key="k", azure_openai_deployment="gpt-4o-mini"))
     assert c and c._url.endswith("/openai/v1/chat/completions") and c._headers["api-key"] == "k"
@@ -152,9 +151,9 @@ def test_invalid_provider_validation_does_not_print_input_value():
 
 def test_pipeline_and_chat_can_use_separate_providers():
     settings = Settings(
-        llm_provider="github",
-        llm_model="openai/gpt-4o-mini",
-        github_token="github-secret",
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_api_key="pipeline-secret",
         chat_llm_provider="gemini",
         chat_llm_model="gemini-3.1-flash-lite",
         chat_llm_api_key="google-secret",
@@ -162,8 +161,8 @@ def test_pipeline_and_chat_can_use_separate_providers():
     pipeline, pipeline_info = build_llm(settings)
     chat, chat_info = build_chat_llm(settings)
 
-    assert pipeline is not None and pipeline_info.active == "github-models"
-    assert pipeline._headers["Authorization"] == "Bearer github-secret"
+    assert pipeline is not None and pipeline_info.active == "gemini"
+    assert pipeline.model == "gemini-3.8-flash"
     assert chat is not None and chat_info.active == "gemini"
     assert chat.model == "gemini-3.1-flash-lite"
     assert "google-secret" not in chat.endpoint
@@ -171,13 +170,13 @@ def test_pipeline_and_chat_can_use_separate_providers():
     service = MatchService(settings, MemoryStore(), pipeline, pipeline_info, chat, chat_info)
     assert service.llm is pipeline and service.chat.llm is chat
     config = service.config()
-    assert config["llm"]["active"] == "github-models"
+    assert config["llm"]["active"] == "gemini"
     assert config["chat"]["llm"] == "gemini"
     assert config["chat"]["model"] == "gemini-3.1-flash-lite"
 
 
 def test_chat_provider_empty_reuses_pipeline_model():
-    settings = Settings(llm_provider="github", github_token="token")
+    settings = Settings(llm_provider="gemini", llm_api_key="token")
     pipeline, pipeline_info = build_llm(settings)
     chat, chat_info = build_chat_llm(settings)
     assert chat is not None and pipeline is not None
@@ -191,8 +190,8 @@ def test_parse_json_object_tolerates_fences():
 
 
 def test_llm_only_for_allowlisted_seeds():
-    svc = make_service(llm_provider="github", github_token="t", llm_seed_allowlist="40")
-    assert svc.variant(40).startswith("github-models") and svc.variant(41) == "template"
+    svc = make_service(llm_provider="gemini", llm_api_key="t", llm_seed_allowlist="40")
+    assert svc.variant(40).startswith("gemini:") and svc.variant(41) == "template"
 
 
 def test_sql_store_roundtrip_and_url_normalisation(tmp_path):
