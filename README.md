@@ -1,8 +1,20 @@
 # Synthetic Match Insights Engine
 
-An AI pipeline and studio UI that turns **synthetic football events** into explainable match intelligence,
-live narratives, automated recaps and overlay cues, personalised per viewer and available in five languages.
-Built for the Microsoft x Premier League *Inside the Game* hackathon. All clubs, players and data are fictional.
+[![CI](https://github.com/Ronak1231/The-Synthetic-Match-Insights-Engine-for-Premier-League-Studio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Ronak1231/The-Synthetic-Match-Insights-Engine-for-Premier-League-Studio/actions/workflows/ci.yml)
+[![Open live demo](https://img.shields.io/badge/demo-live-14b8a6)](https://the-synthetic-match-insights-engine.vercel.app/#lab)
+
+An AI-assisted pipeline and studio UI that turns **synthetic football events** into explainable match intelligence,
+live-style narratives, automated recaps and broadcast-ready overlay cues. Viewers can explore the same match through
+personalized feeds, analytics and a match chatbot. Built for the Microsoft x Premier League *Inside the Game*
+hackathon. All clubs, players and match data are fictional.
+
+**Try it:** [Open the live studio](https://the-synthetic-match-insights-engine.vercel.app/#lab) ·
+[Check backend health](https://the-synthetic-match-insights-engine-for.onrender.com/api/health) ·
+[Test endpoints with Postman](postman/Match%20Insights%20API.postman_collection.json)
+
+> The demo uses synthetic data, not real Premier League matches or video. The free Render backend may take a short
+> time to wake after inactivity. Gemini is optional; deterministic templates and built-in chat answers provide
+> fallbacks when a model is not configured or unavailable.
 
 ```
  synthetic events ──► Ingest ──► Interpreter ──► Explainer ──► Narrator ──► Overlay ──► UI / broadcast graphics
@@ -11,7 +23,7 @@ Built for the Microsoft x Premier League *Inside the Game* hackathon. All clubs,
                          └─────── one orchestrator: shared state · retries · fallbacks · trace ───────┘
 ```
 
-## What is real
+## How it works
 - **Agents** (`backend/app/agents`): ingest, interpreter, explainer, narrator, overlay, personalizer. Shared pipeline
   state, hand-offs, retries, fallbacks, and a trace of every step (visible in the studio under *Show agent trace*).
 - **Narrator with a grounding check:** an LLM (optional) writes captions in all five languages in one call; the text is
@@ -21,7 +33,7 @@ Built for the Microsoft x Premier League *Inside the Game* hackathon. All clubs,
   `POST /api/match/custom` (bring your own events), `/api/profile/{id}`, `/api/config`, `/api/health`, `POST /api/match/{seed}/chat`, `GET /api/match/{seed}/whatif/moments`, `POST /api/match/{seed}/whatif`.
 - **Browser engine = backend engine.** Both produce identical matches and insights; `backend/scripts/parity_check.sh`
   proves it on four seeds. The UI starts on its own simulator immediately and adopts the backend's agent output when it arrives.
-- **Tests:** `cd backend && pytest` (89 tests: simulator, engine, agents, grounding, retries, LLM budget, providers, storage, API, SSE, CORS, what-if model, chat planning, tool facts, grounding rejection, spoiler safety, rate limits, prompt-injection handling). `parity_check.sh` also proves the Python and JS what-if models agree.
+- **Automated checks:** GitHub Actions runs the backend test suite, frontend lint/build and Python/JavaScript parity checks on pushes and pull requests.
 
 ## Intelligence Lab (chat, Second Guess, analytics, film)
 A new section of the UI (`#lab`) with four tabs. Everything is computed from the synthetic events and shows its working.
@@ -60,55 +72,76 @@ a "better option", which is a property of this simplified model and the generate
   they follow the selected language. The what-if model covers shots only (not passes, substitutions or formations).
 
 ## Run locally
-```bash
-# backend (http://localhost:8000)
-cd backend && python -m venv .venv && . .venv/bin/activate
-pip install -r requirements-dev.txt
-cp .env.example .env        # LLM_PROVIDER=template works with no keys
-uvicorn app.main:app --reload
 
-# frontend (http://localhost:5173)
-cd frontend && cp .env.example .env && npm install && npm run dev
+Requirements: Python 3.12, Node.js 22, and npm. No model key or database is required to run the app locally.
+
+### Backend
+
+In PowerShell:
+
+```powershell
+cd backend
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env
 ```
-Try it: `curl -N "localhost:8000/api/match/40/stream?speed=300&start=5000"` and
-`curl "localhost:8000/api/match/40/feed?mode=broadcast&lang=ar&limit=3"`.
 
-## Deploy: Neon + Render + Vercel
-1. **Neon:** create a project, copy the connection string (`postgresql://...?sslmode=require`).
-2. **LLM (optional):** GitHub Models inference was retired on July 30, 2026. Configure Gemini for the match pipeline
+In `backend/.env`, set `LLM_PROVIDER=template` and leave the API keys empty for a no-key setup. Then start the API:
+
+```powershell
+python -m uvicorn app.main:app --reload
+```
+
+On macOS/Linux, activate the environment with `source .venv/bin/activate` and copy the example file with
+`cp .env.example .env`.
+
+### Frontend
+
+Open a second terminal from the repository root:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env
+npm ci
+npm run dev
+```
+
+Open the Vite URL printed in the terminal (typically `http://localhost:5173`). The frontend `.env.example` points to
+the local API at `http://localhost:8000`.
+
+Useful local endpoints: `http://localhost:8000/api/health`, `http://localhost:8000/api/match/40`,
+`http://localhost:8000/api/match/40/feed?mode=broadcast&lang=ar&limit=3`, and `http://localhost:8000/docs`.
+
+## Deployment
+The public demo uses Vercel for the frontend and Render for the backend. Neon/Postgres is optional; without a database,
+the service uses its configured local store. The free Render service may sleep when idle.
+
+For your own deployment:
+1. **LLM (optional):** Configure Gemini for the match pipeline
    (`LLM_PROVIDER=gemini`, `LLM_API_KEY` = Google AI Studio key, `LLM_MODEL=gemini-3.1-flash-lite`) and chat
    (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY`, `CHAT_LLM_MODEL=gemini-3.1-flash-lite`). The same Gemini key
-   can be used for both. Leave `CHAT_LLM_PROVIDER` empty to make chat share the pipeline model. Without keys,
-   the backend uses templates.
-3. **Render (free, dashboard setup):** create a **New Web Service** connected to this GitHub repository and `main`.
+   can be used for both. Leave `CHAT_LLM_PROVIDER` empty to make chat share the pipeline model. Without a model key,
+   the app can use templates and built-in chat responses. GitHub Models inference has been retired; do not configure it.
+2. **Render:** create a Web Service connected to this GitHub repository and `main`.
    Choose **Docker**, set **Root Directory** to `.`, **Dockerfile Path** to `./Dockerfile`, and **Docker Context** to `.`.
-   Select the Free instance. Add `LLM_API_KEY`, `CHAT_LLM_API_KEY`, `DATABASE_URL` (if using Neon), and
-   `CORS_ORIGINS` (your exact Vercel URL) as environment variables. The `LLM_*` and `CHAT_LLM_*` defaults are
-   in `render.yaml`; set them manually in the dashboard because this setup does not require a Blueprint.
-   The free service sleeps when idle; the UI keeps playing on its simulator while it wakes.
-4. **Vercel:** import the repo, set **Root Directory** to `frontend`, add `VITE_API_URL` = your Render URL.
-5. Open the site: the studio panel should say *Backend live*.
+   Set the health check path to `/api/health`. Add the model keys if enabling Gemini, `DATABASE_URL` if using Neon,
+   and `CORS_ORIGINS` with your exact frontend origin. The `render.yaml` contains Blueprint defaults; manually created
+   services need their environment variables set in the dashboard.
+3. **Vercel:** import the repository, set **Root Directory** to `frontend`, and set `VITE_API_URL` to your backend URL.
 
 ## Configuration
 All switches are environment variables, listed in `backend/.env.example`: `LLM_PROVIDER` (`template`, `github` (retired),
 `openai_compat`, `gemini`, `azure`), `STORE_PROVIDER` (`auto`, `memory`, `sql`, `cosmos`), `DATABASE_URL`, CORS settings, and
 LLM spend guards (`LLM_SEED_ALLOWLIST`, `LLM_MAX_CALLS_PER_MATCH`). Moving to Azure is a change of these values.
 
-## Frontend
-React + Vite, GSAP and ScrollTrigger (pinned pipeline walkthrough, reveals, lower-thirds), Lenis smooth scrolling kept in
-sync with GSAP, and React Bits components (Aurora, SplitText, GradientText, ShinyText, ScrollReveal, SpotlightCard,
-BorderGlow, GlareHover, ElectricBorder, Magnet, ClickSpark; MIT with Commons Clause). The UI has not been checked in a
-real browser by its author yet.
-
-## Free stack (no Azure account needed)
-| Need | Free option used |
-|---|---|
-| LLM (optional) | Gemini via Google AI Studio for the match pipeline (`LLM_PROVIDER=gemini`, `LLM_API_KEY`) and chat (`CHAT_LLM_PROVIDER=gemini`, `CHAT_LLM_API_KEY`). |
-| Hosting | Vercel (frontend), Render free web service (API), Neon free Postgres. Ping `/api/health` every 10 minutes with a free monitor to stop the API sleeping during judging. |
-| Voice, video | Browser Web Speech API, canvas + MediaRecorder |
-| Dev tooling | GitHub, GitHub Copilot, GitHub Actions (CI in `.github/workflows/ci.yml`) |
-
-With no Gemini key the app still works end to end on templates.
+## Tech stack and project boundaries
+- **Frontend:** React, Vite, GSAP/ScrollTrigger and Lenis.
+- **Backend:** Python, FastAPI and a project-specific multi-agent orchestrator.
+- **Optional model:** Gemini; GitHub Models inference was retired on July 30, 2026.
+- **Hosting:** Vercel frontend and Render API for the public demo; optional SQL/Postgres storage.
+- **Azure:** Azure OpenAI/Foundry and Cosmos DB adapters exist but have not been validated against a live Azure account.
+- **Not included:** video-based event detection or live-broadcast analysis. The match film is rendered from synthetic events.
 
 ## Troubleshooting the AI model
 Open the Lab, Ask tab, and press **Check AI connection** (or `GET /api/llm/check` on the backend). It sends one tiny request and
