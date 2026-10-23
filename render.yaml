@@ -4,6 +4,7 @@ services:
     name: match-insights-api
     runtime: docker
     plan: free
+    rootDir: .
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
